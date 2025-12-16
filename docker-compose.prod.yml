@@ -8,16 +8,18 @@ services:
       dockerfile: Dockerfile.prod
     restart: always
     environment:
-      - APP_PORT=8000
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-dokumen_user}
-      - DB_PASSWORD=${DB_PASSWORD:-dokumen_pass}
-      - DB_NAME=${DB_NAME:-dokumen_keuangan}
-      # Adjust JWT Secret for production security!
-      - JWT_SECRET=${JWT_SECRET:-very_secret_key_change_me}
-    depends_on:
-      - db
+      # Application will run on internal port 8081 to avoid conflicts
+      - APP_PORT=8081
+      
+      # Database Connection (Injected via Dokploy Environment Variables)
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      
+      # Security
+      - JWT_SECRET=${JWT_SECRET}
     networks:
       - app_network
 
@@ -29,6 +31,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
     restart: always
+    # Dokploy / Traefik will pick up this port (80)
+    expose:
+      - "80"
+    
     # Dokploy / Traefik Labels for Auto-Domain & SSL
     labels:
       - "traefik.enable=true"
@@ -36,29 +42,12 @@ services:
       - "traefik.http.routers.dokumen-app.entrypoints=websecure"
       - "traefik.http.routers.dokumen-app.tls.certresolver=letsencrypt"
       - "traefik.http.services.dokumen-app.loadbalancer.server.port=80"
+      
     depends_on:
       - backend
-    networks:
-      - app_network
-
-  # ----------------
-  # Database Service
-  # ----------------
-  db:
-    image: postgres:16-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: ${DB_USER:-dokumen_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-dokumen_pass}
-      POSTGRES_DB: ${DB_NAME:-dokumen_keuangan}
-    volumes:
-      - pg_data_prod:/var/lib/postgresql/data
     networks:
       - app_network
 
 networks:
   app_network:
     driver: bridge
-
-volumes:
-  pg_data_prod:

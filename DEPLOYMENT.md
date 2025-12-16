@@ -1,73 +1,50 @@
-# Panduan Deployment ke Dokploy (VPS)
+# Panduan Deployment ke Dokploy (Production)
 
-Dokumen ini berisi langkah-langkah untuk men-deploy aplikasi **Manajemen Dokumen Keuangan** ke server VPS menggunakan **Dokploy**.
+Dokumen ini berisi langkah-langkah deployment aplikasi **Manajemen Dokumen Keuangan** ke server Dokploy dengan arsitektur **Terpisah** (App & Database).
 
-## Persiapan File
+## Arsitektur
+- **Service 1 (Database)**: PostgreSQL (Managed by Dokploy).
+- **Service 2 (Application)**: Frontend + Backend (Managed by Docker Compose).
 
-Saya telah menyiapkan 4 file kunci untuk deployment production:
+## Langkah 1: Persiapan Database
 
-1.  `backend/Dockerfile.prod`: Konfigurasi build backend yang ringan (Go -> Alpine).
-2.  `frontend/Dockerfile.prod`: Konfigurasi build frontend + Nginx server.
-3.  `frontend/nginx.conf`: Konfigurasi server Nginx untuk handle routing Vue & Proxy API.
-4.  `docker-compose.prod.yml`: File orkestrasi utama.
+1.  Buka Project Anda di Dokploy.
+2.  Klik **"Create Service"** -> Pilih **"Database"** -> **PostgreSQL**.
+3.  Beri nama (misal: `dokumen-db`).
+4.  Setelah dibuat, masuk ke tab **Environment** atau detail database untuk mendapatkan kredensial:
+    - **Host** (Internal Name, misal: `postgresql-dokumen-db` atau IP internal)
+    - **Database Name**
+    - **User**
+    - **Password**
+    - **Port** (Default: 5432)
 
-## Langkah-Langkah Deployment di Dokploy
+## Langkah 2: Deployment Aplikasi
 
-### 1. Push Code ke GitHub
-Pastikan semua file terbaru (termasuk file deployment yang baru dibuat) sudah di-push ke repository GitHub Anda.
-
-```bash
-git add .
-git commit -m "Chore: Add deployment configuration files"
-git push origin main
-```
-
-### 2. Setup Project di Dokploy
-
-1.  Login ke Dashboard Dokploy Anda.
-2.  Buat **Project Baru** (misal: `manajemen-dokumen`).
-3.  Masuk ke Project tersebut.
-
-### 3. Deploy Menggunakan Docker Compose (Recommended)
-
-Cara termudah adalah menggunakan fitur "Compose" di Dokploy untuk men-handle stack (Frontend + Backend + DB) sekaligus.
-
-1.  Klik **"Compose"** di menu service.
-2.  **Service Name**: Bebas (misal: `main-stack`).
-3.  **Repository**: Pilih repository GitHub project ini.
-4.  **Branch**: `main`.
-5.  **Compose Path**: Masukkan path ke file produksi kita:
-    `./docker-compose.prod.yml`
-    *(Dokploy akan membaca file ini alih-alih docker-compose.yml biasa)*.
-
-### 4. Konfigurasi Environment (Opsional)
-
-Jika Anda ingin mengubah password database atau secret key:
-1.  Masuk ke tab **Environment**.
-2.  Tambahkan variabel:
+1.  Kembali ke Project, klik **"Create Service"** -> Pilih **"Compose"**.
+2.  Beri nama (misal: `dokumen-app`).
+3.  **Repository**: Hubungkan ke GitHub repo ini.
+4.  **Branch**: `main`
+5.  **Compose Path**: `./docker-compose.prod.yml`
+6.  Masuk ke tab **Environment** dan masukkan kredensial Database dari Langkah 1:
     ```env
-    DB_USER=dokumen_user_prod
-    DB_PASSWORD=password_super_rahasia
-    DB_NAME=dokumen_keuangan_prod
-    JWT_SECRET=rahasia_jwt_yang_panjang_dan_acak
+    DB_HOST=nama_internal_host_database
+    DB_PORT=5432
+    DB_USER=user_database_anda
+    DB_PASSWORD=password_database_anda
+    DB_NAME=nama_database_anda
+    JWT_SECRET=buat_random_string_panjang
     ```
-    *(Pastikan value ini sama di service Backend dan DB)*.
 
-### 5. Deploy
+## Langkah 3: Deploy & Domain
 
-Klik tombol **Deploy**. Dokploy akan:
-1.  Pull repository.
-2.  Build image backend (Go).
-3.  Build image frontend (Vue -> Nginx).
-4.  Menjalankan database Postgres.
-5.  Menjalankan semuanya dalam satu network.
+1.  Klik **Deploy** pada Service Aplikasi.
+2.  Sistem otomatis akan:
+    - Build Backend (Go).
+    - Build Frontend (Vue).
+    - Setup Nginx & Routing.
+3.  **Domain Otomatis**:
+    File `docker-compose.prod.yml` sudah dilengkapi label Traefik untuk domain `dokumen.keudisdiksulteng.web.id`.
+    - Pastikan DNS A Record domain tersebut sudah mengarah ke IP Server Dokploy Anda.
+    - Tunggu beberapa saat, Traefik akan otomatis generate SSL certificate.
 
-### 6. Akses Domain
-
-Setelah status "Running":
-1.  Di Dokploy, buka service `frontend` (atau port 80 yang di-expose).
-2.  Tambahkan **Domain** Anda (misal: `dokumen.domainanda.com`).
-3.  Aktifkan **HTTPS/SSL** (Let's Encrypt) di tab Domain.
-4.  Buka domain tersebut di browser.
-
-Aplikasi Anda kini live di production! 🚀
+Selesai! Aplikasi Anda berjalan aman dengan database terpisah. 🚀
