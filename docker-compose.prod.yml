@@ -1,85 +1,38 @@
+version: '3.8'
+
 services:
-  # ---------------
-  # Backend Service
-  # ---------------
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.prod
-    restart: always
-    # Expose port 8081 agar bisa diakses frontend melalui internal network
-    expose:
-      - "8081"
+    container_name: dokumen-keuangan-backend
+    restart: unless-stopped
+    ports:
+      - "8001:8081"
     environment:
-      # Application will run on internal port 8081 to avoid conflicts
       - APP_PORT=8081
-      
-      # Database Connection (Matched with your Dokploy Database Service)
-      # PENTING: Variable names harus sesuai dengan config.go (DB_USERNAME, DB_DATABASE)
-      # Hostname: dokumen-keuangan-database-up1ivd (huruf 'i', bukan 'l')
-      - DB_HOST=${DB_HOST:-dokumen-keuangan-database-up1ivd}
-      - DB_PORT=${DB_PORT:-5432}
-      - DB_USERNAME=${DB_USERNAME:-dokumen_user}
-      - DB_PASSWORD=${DB_PASSWORD:-Fr3aks@16121899}
-      - DB_DATABASE=${DB_DATABASE:-dokumen_db}
-      
-      # Security (Default key provided, ideally override this in Dokploy Environment tab)
-      - JWT_SECRET=${JWT_SECRET:-dokumen_rahasia_key_2025}
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      - DB_HOST=dokumen-keuangan-database-up1ivd
+      - DB_PORT=5432
+      - DB_USERNAME=dokumen_user
+      - DB_PASSWORD=Fr3aks@16121899
+      - DB_DATABASE=dokumen_db
+      - JWT_SECRET=dokumen_rahasia_key_2025
+    networks:
+      - dokploy-network
 
-  # ----------------
-  # Frontend Service
-  # ----------------
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-    restart: always
-    # Dokploy / Traefik will pick up this port (80)
-    expose:
-      - "80"
-    
-    # Dokploy / Traefik Labels for Auto-Domain & SSL
-    # UNIQUE NAMES to avoid conflicts with other projects
-    labels:
-      - "traefik.enable=true"
-      
-      # HTTP Router (redirects to HTTPS)
-      - "traefik.http.routers.keudis-dokumen-http.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
-      - "traefik.http.routers.keudis-dokumen-http.entrypoints=web"
-      - "traefik.http.routers.keudis-dokumen-http.middlewares=keudis-dokumen-redirect@docker"
-      
-      # HTTPS Router
-      - "traefik.http.routers.keudis-dokumen-https.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
-      - "traefik.http.routers.keudis-dokumen-https.entrypoints=websecure"
-      - "traefik.http.routers.keudis-dokumen-https.tls=true"
-      - "traefik.http.routers.keudis-dokumen-https.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.keudis-dokumen-https.service=keudis-dokumen-svc"
-      
-      # Service configuration
-      - "traefik.http.services.keudis-dokumen-svc.loadbalancer.server.port=80"
-      
-      # Redirect middleware
-      - "traefik.http.middlewares.keudis-dokumen-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.keudis-dokumen-redirect.redirectscheme.permanent=true"
-      
+    container_name: dokumen-keuangan-frontend
+    restart: unless-stopped
+    ports:
+      - "3002:80"
     depends_on:
-      backend:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/nginx-health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - backend
+    networks:
+      - dokploy-network
 
-# Gunakan Network default Dokploy agar bisa komunikasi dengan Traefik & Database
 networks:
-  default:
+  dokploy-network:
     external: true
-    name: dokploy-network
-
