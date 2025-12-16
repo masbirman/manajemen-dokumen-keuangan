@@ -29,6 +29,9 @@ WORKDIR /app
 # Install basic utils if needed (ca-certificates for HTTPS calls, wget for health checks)
 RUN apk add --no-cache ca-certificates wget
 
+# Create storage directories
+RUN mkdir -p /app/storage/app/public
+
 # Copy binary from builder
 COPY --from=builder /app/main .
 
