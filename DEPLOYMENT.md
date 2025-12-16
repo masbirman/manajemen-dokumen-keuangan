@@ -24,7 +24,7 @@ Dokumen ini berisi langkah-langkah deployment aplikasi **Manajemen Dokumen Keuan
 2.  Beri nama (misal: `dokumen-app`).
 3.  **Repository**: Hubungkan ke GitHub repo ini.
 4.  **Branch**: `main`
-5.  **Compose Path**: `./docker-compose.prod.yml`
+5.  **Compose Path**: `docker-compose.prod.yml`
 6.  Masuk ke tab **Environment** dan masukkan kredensial Database dari Langkah 1:
     ```env
     DB_HOST=nama_internal_host_database
