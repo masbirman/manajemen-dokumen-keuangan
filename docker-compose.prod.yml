@@ -45,26 +45,28 @@ services:
       - "80"
     
     # Dokploy / Traefik Labels for Auto-Domain & SSL
+    # UNIQUE NAMES to avoid conflicts with other projects
     labels:
       - "traefik.enable=true"
       
       # HTTP Router (redirects to HTTPS)
-      - "traefik.http.routers.dokumen-app-http.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
-      - "traefik.http.routers.dokumen-app-http.entrypoints=web"
-      - "traefik.http.routers.dokumen-app-http.middlewares=redirect-to-https@docker"
+      - "traefik.http.routers.keudis-dokumen-http.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
+      - "traefik.http.routers.keudis-dokumen-http.entrypoints=web"
+      - "traefik.http.routers.keudis-dokumen-http.middlewares=keudis-dokumen-redirect@docker"
       
       # HTTPS Router
-      - "traefik.http.routers.dokumen-app.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
-      - "traefik.http.routers.dokumen-app.entrypoints=websecure"
-      - "traefik.http.routers.dokumen-app.tls=true"
-      - "traefik.http.routers.dokumen-app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.keudis-dokumen-https.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
+      - "traefik.http.routers.keudis-dokumen-https.entrypoints=websecure"
+      - "traefik.http.routers.keudis-dokumen-https.tls=true"
+      - "traefik.http.routers.keudis-dokumen-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.keudis-dokumen-https.service=keudis-dokumen-svc"
       
       # Service configuration
-      - "traefik.http.services.dokumen-app.loadbalancer.server.port=80"
+      - "traefik.http.services.keudis-dokumen-svc.loadbalancer.server.port=80"
       
       # Redirect middleware
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+      - "traefik.http.middlewares.keudis-dokumen-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.keudis-dokumen-redirect.redirectscheme.permanent=true"
       
     depends_on:
       backend:
