@@ -43,3 +43,9 @@ services:
       
     depends_on:
       - backend
+
+# Gunakan Network default Dokploy agar bisa komunikasi dengan Traefik & Database
+networks:
+  default:
+    external: true
+    name: dokploy-network
