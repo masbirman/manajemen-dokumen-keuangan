@@ -17,8 +17,6 @@ services:
       - DB_PASSWORD=Fr3aks@16121899
       - DB_DATABASE=dokumen_db
       - JWT_SECRET=dokumen_rahasia_key_2025
-    volumes:
-      - backend_storage:/app/storage
     networks:
       - dokploy-network
 
@@ -38,6 +36,3 @@ services:
 networks:
   dokploy-network:
     external: true
-
-volumes:
-  backend_storage:
