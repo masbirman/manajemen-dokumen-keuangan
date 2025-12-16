@@ -11,17 +11,15 @@ services:
       # Application will run on internal port 8081 to avoid conflicts
       - APP_PORT=8081
       
-      # Database Connection (Injected via Dokploy Environment Variables)
-      - DB_HOST=${DB_HOST}
+      # Database Connection (Matched with your Dokploy Database Service)
+      - DB_HOST=${DB_HOST:-dokumen-keuangan-database-up1lvd}
       - DB_PORT=${DB_PORT:-5432}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER:-dokumen_user}
+      - DB_PASSWORD=${DB_PASSWORD:-Fr3aks@16121899}
+      - DB_NAME=${DB_NAME:-dokumen_db}
       
-      # Security
-      - JWT_SECRET=${JWT_SECRET}
-    networks:
-      - app_network
+      # Security (Default key provided, ideally override this in Dokploy Environment tab)
+      - JWT_SECRET=${JWT_SECRET:-dokumen_rahasia_key_2025}
 
   # ----------------
   # Frontend Service
@@ -45,9 +43,3 @@ services:
       
     depends_on:
       - backend
-    networks:
-      - app_network
-
-networks:
-  app_network:
-    driver: bridge
