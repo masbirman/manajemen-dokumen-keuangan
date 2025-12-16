@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
 import axios from "axios";
@@ -140,15 +140,31 @@ const formatItemText = (item: InfoItem): string => {
   return text;
 };
 
+const isMobile = ref(false);
+const isInfoExpanded = ref(false);
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth < 1024; // lg breakpoint matches the CSS layout change
+  if (!isMobile.value) {
+    isInfoExpanded.value = true; // Always expanded on desktop
+  }
+};
+
 onMounted(async () => {
+  handleResize();
+  window.addEventListener("resize", handleResize);
   await fetchLoginSettings();
   parseInfoContent();
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", handleResize);
 });
 </script>
 
 <template>
   <div
-    class="min-h-screen flex items-center justify-center p-4"
+    class="min-h-screen flex items-center justify-center p-4 transition-colors duration-300"
     :style="{ backgroundColor: settings.login_bg_color }"
   >
     <!-- Loading state -->
@@ -159,18 +175,31 @@ onMounted(async () => {
     <!-- Main Card - Contains both Info and Form -->
     <div 
       v-else 
-      class="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-5xl flex flex-col lg:flex-row"
+      class="bg-white rounded-2xl shadow-2xl overflow-hidden w-full max-w-5xl flex flex-col-reverse lg:flex-row transition-all duration-300"
       style="box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);"
     >
-      <!-- Left Panel - Information -->
-      <div class="lg:w-1/2 p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-gray-100">
-        <h2 class="text-xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-          <span class="text-blue-500">ℹ️</span>
-          {{ settings.login_info_title }}
-        </h2>
+      <!-- Left Panel (Desktop) / Bottom Panel (Mobile) - Information -->
+      <div class="lg:w-1/2 p-6 md:p-8 lg:p-10 border-t lg:border-t-0 lg:border-r border-gray-100 bg-gray-50 lg:bg-white transition-all duration-300">
+        <div 
+          @click="isMobile ? isInfoExpanded = !isInfoExpanded : null"
+          class="flex items-center justify-between mb-0 lg:mb-6 cursor-pointer lg:cursor-default group select-none"
+          :class="{'mb-6': isInfoExpanded}"
+        >
+          <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <span class="text-blue-500">ℹ️</span>
+            {{ settings.login_info_title }}
+          </h2>
+          <span 
+            v-if="isMobile" 
+            class="text-gray-400 group-hover:text-gray-600 transition-transform duration-300 transform font-bold text-lg"
+            :class="isInfoExpanded ? 'rotate-180' : 'rotate-0'"
+          >
+            ▼
+          </span>
+        </div>
         
-        <!-- Info Sections -->
-        <div class="space-y-6">
+        <!-- Info Sections Wrapper with Transition -->
+        <div v-show="isInfoExpanded" class="space-y-6 overflow-hidden transition-all duration-300">
           <!-- Default Info if no sections defined -->
           <div v-if="infoSections.length === 0" class="space-y-4">
             <div class="border-l-4 border-blue-500 pl-4">
@@ -222,8 +251,8 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Right Panel - Login Form -->
-      <div class="lg:w-1/2 p-8 lg:p-10 flex flex-col justify-center">
+      <!-- Right Panel (Desktop) / Top Panel (Mobile) - Login Form -->
+      <div class="lg:w-1/2 p-6 md:p-8 lg:p-10 flex flex-col justify-center bg-white">
         <!-- Logo & Header -->
         <div class="text-center mb-8">
           <div v-if="settings.login_logo_url" class="mb-4">

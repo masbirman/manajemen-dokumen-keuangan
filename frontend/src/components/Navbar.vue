@@ -37,7 +37,7 @@ const logout = async () => {
       <div class="flex items-center">
         <button
           @click="$emit('toggleSidebar')"
-          class="p-2 rounded-lg hover:bg-gray-100 lg:hidden"
+          class="p-2 rounded-lg hover:bg-gray-100 md:hidden"
         >
           ☰
         </button>

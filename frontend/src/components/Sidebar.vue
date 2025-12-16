@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 
 defineProps<{
   open: boolean;
+  isMobile?: boolean;
 }>();
 
 defineEmits<{
@@ -98,7 +99,11 @@ const isActive = (path: string) => {
 <template>
   <aside
     class="fixed left-0 top-0 h-full bg-slate-900 text-slate-100 transition-all duration-300 z-50 shadow-xl"
-    :class="open ? 'w-64' : 'w-16'"
+    :class="[
+      isMobile 
+        ? (open ? 'translate-x-0 w-64' : '-translate-x-full w-64') 
+        : (open ? 'w-64' : 'w-16')
+    ]"
   >
     <div class="flex items-center justify-between p-4 border-b border-slate-700/50">
       <h1 v-if="open" class="text-xl font-bold tracking-tight text-white">Dokumen Keuangan</h1>

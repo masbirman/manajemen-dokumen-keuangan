@@ -223,7 +223,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Logo or Clock icon -->
-        <div class="flex-shrink-0">
+        <div class="flex-shrink-0 hidden md:block">
           <img
             v-if="logoUrl"
             :src="logoUrl"
@@ -430,20 +430,26 @@ onUnmounted(() => {
             to="/dokumen"
             class="block p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <div class="flex justify-between items-start">
-              <div>
-                <p class="font-medium text-gray-800">
-                  {{ doc.jenis_dokumen?.kode || doc.jenis_dokumen?.nama || 'Jenis' }} / {{ doc.sumber_dana?.nama || 'Sumber Dana' }}
-                </p>
-                <p class="text-sm text-gray-500 truncate max-w-xs">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-y-3 sm:gap-x-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700">
+                    {{ doc.jenis_dokumen?.kode || 'Kode' }}
+                  </span>
+                  <span class="text-xs text-gray-500 truncate flex-1">
+                    {{ doc.sumber_dana?.nama || 'Sumber Dana' }}
+                  </span>
+                </div>
+                <p class="text-sm font-medium text-gray-800 truncate" :title="doc.uraian">
                   {{ doc.uraian }}
                 </p>
               </div>
-              <div class="text-right">
-                <p class="text-sm font-medium text-blue-600">
+              
+              <div class="flex sm:flex-col flex-row justify-between items-center sm:items-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200 mt-1 sm:mt-0">
+                <p class="text-sm font-bold text-blue-600 whitespace-nowrap">
                   {{ formatCurrency(doc.nilai) }}
                 </p>
-                <p class="text-xs text-gray-400">
+                <p class="text-xs text-gray-400 whitespace-nowrap sm:mt-1">
                   {{ formatDate(doc.tanggal_dokumen) }}
                 </p>
               </div>
