@@ -1,0 +1,31 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+tmp/
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+
+# Storage
+storage/app/public/*
+!storage/app/public/.gitkeep
+storage/logs/*
+!storage/logs/.gitkeep

@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Rich text content styling (for petunjuk, etc.) */
+.petunjuk-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 0.5rem;
+}
+
+.petunjuk-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin-bottom: 0.5rem;
+}
+
+.petunjuk-content li {
+  display: list-item !important;
+  margin-bottom: 0.25rem;
+}
+
+.petunjuk-content p {
+  margin-bottom: 0.5rem;
+}
+
+.petunjuk-content h1,
+.petunjuk-content h2,
+.petunjuk-content h3 {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.petunjuk-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.petunjuk-content strong {
+  font-weight: 600;
+}
+
+.petunjuk-content em {
+  font-style: italic;
+}
+
+.petunjuk-content u {
+  text-decoration: underline;
+}
+
+.petunjuk-content s {
+  text-decoration: line-through;
+}
+
+/* Quill editor specific classes */
+.petunjuk-content .ql-indent-1 {
+  padding-left: 1.5rem;
+}
+
+.petunjuk-content .ql-indent-2 {
+  padding-left: 3rem;
+}
+
+.petunjuk-content .ql-indent-3 {
+  padding-left: 4.5rem;
+}
+
+/* Image styling in petunjuk content */
+.petunjuk-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+/* Alignment classes from Quill */
+.petunjuk-content .ql-align-center,
+.petunjuk-content [style*="text-align: center"] {
+  text-align: center !important;
+}
+
+.petunjuk-content .ql-align-right,
+.petunjuk-content [style*="text-align: right"] {
+  text-align: right !important;
+}
+
+.petunjuk-content .ql-align-justify,
+.petunjuk-content [style*="text-align: justify"] {
+  text-align: justify !important;
+}
+
+/* Center images - handle both class and inline style */
+.petunjuk-content .ql-align-center img,
+.petunjuk-content [style*="text-align: center"] img,
+.petunjuk-content p:has(img)[style*="text-align: center"] img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.petunjuk-content .ql-align-right img,
+.petunjuk-content [style*="text-align: right"] img {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* For images wrapped in paragraph with text-align */
+.petunjuk-content p[style*="text-align: center"] {
+  text-align: center !important;
+}
+
+.petunjuk-content p[style*="text-align: right"] {
+  text-align: right !important;
+}
+
+.petunjuk-content p[style*="text-align: justify"] {
+  text-align: justify !important;
+}

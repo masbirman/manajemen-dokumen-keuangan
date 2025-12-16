@@ -1,0 +1,72 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: dokumen_keuangan_db
+    environment:
+      POSTGRES_USER: dokumen_user
+      POSTGRES_PASSWORD: dokumen_pass
+      POSTGRES_DB: dokumen_keuangan
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dokumen_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dokumen_user -d dokumen_keuangan"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Goravel Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dokumen_keuangan_backend
+    environment:
+      APP_ENV: local
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: dokumen_keuangan
+      DB_USERNAME: dokumen_user
+      DB_PASSWORD: dokumen_pass
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - file_storage:/app/storage/app/public
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - dokumen_network
+
+  # Vue.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: dokumen_keuangan_frontend
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - dokumen_network
+
+volumes:
+  postgres_data:
+  file_storage:
+
+networks:
+  dokumen_network:
+    driver: bridge
