@@ -47,10 +47,24 @@ services:
     # Dokploy / Traefik Labels for Auto-Domain & SSL
     labels:
       - "traefik.enable=true"
+      
+      # HTTP Router (redirects to HTTPS)
+      - "traefik.http.routers.dokumen-app-http.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
+      - "traefik.http.routers.dokumen-app-http.entrypoints=web"
+      - "traefik.http.routers.dokumen-app-http.middlewares=redirect-to-https@docker"
+      
+      # HTTPS Router
       - "traefik.http.routers.dokumen-app.rule=Host(`dokumen.keudisdiksulteng.web.id`)"
       - "traefik.http.routers.dokumen-app.entrypoints=websecure"
+      - "traefik.http.routers.dokumen-app.tls=true"
       - "traefik.http.routers.dokumen-app.tls.certresolver=letsencrypt"
+      
+      # Service configuration
       - "traefik.http.services.dokumen-app.loadbalancer.server.port=80"
+      
+      # Redirect middleware
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
       
     depends_on:
       backend:
