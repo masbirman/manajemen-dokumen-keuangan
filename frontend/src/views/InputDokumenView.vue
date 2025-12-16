@@ -175,12 +175,7 @@ const handleScannedPdf = (f: File) => {
   toast.success("PDF dari scan berhasil dibuat");
 };
 
-const isMobile = computed(() => {
-  if (typeof navigator === "undefined") return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
-});
+
 
 const submit = async () => {
   errors.value = {};
@@ -316,31 +311,48 @@ onMounted(() => {
           </div>
 
           <div>
-            <div class="flex items-center gap-2 mb-1">
-              <label class="block text-sm font-medium text-gray-700"
-                >File Dokumen (PDF)</label
-              >
+            <label class="block text-sm font-medium text-gray-700 mb-2"
+              >File Dokumen (PDF)</label
+            >
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <!-- Upload Option -->
+              <div>
+                <FileUpload
+                  accept=".pdf"
+                  :error="errors.file"
+                  @update:file="handleFileUpdate"
+                  required
+                />
+              </div>
+
+              <!-- Scan Option -->
               <button
-                v-if="isMobile"
                 type="button"
                 @click="showScanner = true"
-                class="text-sm text-blue-600 hover:text-blue-800"
+                class="border-2 border-dashed border-blue-300 bg-blue-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-100 transition-all gap-2 group min-h-[160px]"
               >
-                📷 Scan Dokumen
+                <div class="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  📷
+                </div>
+                <div class="text-center">
+                  <p class="font-semibold text-blue-700">Scan Dokumen</p>
+                  <p class="text-xs text-blue-500 mt-1">Gunakan kamera HP/Tablet</p>
+                </div>
               </button>
             </div>
-            <p class="text-xs text-gray-500 mb-2">
-              Maksimal ukuran file: 300KB
-            </p>
-            <FileUpload
-              accept=".pdf"
-              :error="errors.file"
-              @update:file="handleFileUpdate"
-              required
-            />
-            <p v-if="file" class="mt-1 text-sm text-green-600">
-              ✓ {{ file.name }} ({{ (file.size / 1024).toFixed(0) }}KB)
-            </p>
+
+            <div class="flex justify-between items-start mt-2">
+              <p class="text-xs text-gray-500">
+                Maksimal ukuran file: 300KB
+              </p>
+              <p v-if="file" class="text-sm font-medium text-green-600 flex items-center gap-1">
+                <span>✓</span>
+                {{ file.name }}
+                <span class="text-gray-400 font-normal">({{ (file.size / 1024).toFixed(0) }}KB)</span>
+              </p>
+            </div>
+            <p v-if="errors.file" class="text-xs text-red-500 mt-1">{{ errors.file }}</p>
           </div>
 
           <div class="flex justify-end gap-3 pt-4">

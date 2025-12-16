@@ -189,9 +189,21 @@ onUnmounted(() => {
     </div>
   </div>
 
-  <div v-else class="text-center p-8 bg-gray-100 rounded-lg">
-    <p class="text-gray-500">
-      📱 Fitur scan dokumen hanya tersedia di perangkat mobile
-    </p>
+  <div v-else class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center animate-bounce-in">
+      <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+        📱
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 mb-2">Gunakan Smartphone</h3>
+      <p class="text-gray-600 mb-6">
+        Fitur scan kamera hanya tersedia jika diakses melalui browser HP / Tablet.
+      </p>
+      <button 
+        @click="$emit('close')"
+        class="w-full py-2.5 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+      >
+        Mengerti
+      </button>
+    </div>
   </div>
 </template>
