@@ -25,15 +25,10 @@ func RunSeeders() error {
 	return nil
 }
 
-// seedSuperAdmin creates the default super admin user if not exists
+// seedSuperAdmin creates or updates the default super admin user
 func seedSuperAdmin() error {
-	var count int64
-	database.DB.Model(&models.User{}).Where("role = ?", models.RoleSuperAdmin).Count(&count)
-
-	if count > 0 {
-		log.Println("Super Admin already exists, skipping seeder")
-		return nil
-	}
+	var existingUser models.User
+	result := database.DB.Where("username = ?", "superadmin").First(&existingUser)
 
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
@@ -41,6 +36,19 @@ func seedSuperAdmin() error {
 		return err
 	}
 
+	if result.Error == nil {
+		// User exists, update password
+		existingUser.Password = string(hashedPassword)
+		if err := database.DB.Save(&existingUser).Error; err != nil {
+			return err
+		}
+		log.Println("Super Admin password updated successfully")
+		log.Println("Username: superadmin")
+		log.Println("Password: admin123")
+		return nil
+	}
+
+	// User doesn't exist, create new
 	superAdmin := models.User{
 		ID:       uuid.New(),
 		Username: "superadmin",
