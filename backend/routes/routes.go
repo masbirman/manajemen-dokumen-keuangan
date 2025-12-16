@@ -20,6 +20,10 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 	// Auth routes (public)
 	setupAuthRoutes(api, cfg)
 
+	// Public settings for login page (no auth required)
+	settingController := controllers.NewSettingController()
+	api.Get("/public/login-settings", settingController.GetLoginSettings)
+
 	// Protected routes (require authentication)
 	protected := api.Group("", middleware.AuthMiddleware(cfg))
 
@@ -179,6 +183,7 @@ func setupSettingRoutes(api fiber.Router) {
 	// Settings routes - Super Admin only
 	settings.Get("/", middleware.RequireRole(models.RoleSuperAdmin), settingController.GetAll)
 	settings.Put("/", middleware.RequireRole(models.RoleSuperAdmin), settingController.Update)
+	settings.Post("/upload-logo", middleware.RequireRole(models.RoleSuperAdmin), settingController.UploadLogo)
 }
 
 
@@ -195,6 +200,7 @@ func setupPetunjukRoutes(api fiber.Router) {
 	petunjuk.Get("/", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.GetAll)
 	petunjuk.Get("/:id", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.GetByID)
 	petunjuk.Post("/", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.Create)
+	petunjuk.Post("/upload-image", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.UploadImage)
 	petunjuk.Put("/:id", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.Update)
 	petunjuk.Delete("/:id", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.Delete)
 }

@@ -1,7 +1,12 @@
 package controllers
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	"dokumen-keuangan/app/services"
 
@@ -179,5 +184,59 @@ func (c *PetunjukController) Delete(ctx *fiber.Ctx) error {
 
 	return ctx.JSON(fiber.Map{
 		"message": "Petunjuk deleted successfully",
+	})
+}
+
+// UploadImage handles image upload for petunjuk
+// POST /api/petunjuk/upload-image
+func (c *PetunjukController) UploadImage(ctx *fiber.Ctx) error {
+	file, err := ctx.FormFile("file")
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "File is required",
+		})
+	}
+
+	// Validate file type
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
+	if !allowedExts[ext] {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid file type. Allowed: jpg, jpeg, png, gif, webp",
+		})
+	}
+
+	// Validate file size (max 5MB)
+	if file.Size > 5*1024*1024 {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "File size must be less than 5MB",
+		})
+	}
+
+	// Create storage directory if not exists
+	storageDir := "./storage/app/public/petunjuk"
+	if err := os.MkdirAll(storageDir, 0755); err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to create storage directory",
+		})
+	}
+
+	// Generate unique filename
+	filename := fmt.Sprintf("petunjuk_%s_%d%s", uuid.New().String()[:8], time.Now().Unix(), ext)
+	filePath := filepath.Join(storageDir, filename)
+
+	// Save the file
+	if err := ctx.SaveFile(file, filePath); err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to save file",
+		})
+	}
+
+	// Generate URL
+	fileURL := fmt.Sprintf("/api/files/petunjuk/%s", filename)
+
+	return ctx.JSON(fiber.Map{
+		"message": "Image uploaded successfully",
+		"url":     fileURL,
 	})
 }

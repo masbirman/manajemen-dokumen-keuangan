@@ -55,6 +55,7 @@ type CreateDokumenInput struct {
 	SumberDanaID   uuid.UUID `json:"sumber_dana_id"`
 	Nilai          float64   `json:"nilai"`
 	Uraian         string    `json:"uraian"`
+	NomorKwitansi  string    `json:"nomor_kwitansi"`
 }
 
 
@@ -68,6 +69,7 @@ type UpdateDokumenInput struct {
 	SumberDanaID   *uuid.UUID `json:"sumber_dana_id"`
 	Nilai          *float64   `json:"nilai"`
 	Uraian         string     `json:"uraian"`
+	NomorKwitansi  string     `json:"nomor_kwitansi"`
 }
 
 // DokumenFilterInput represents filter input for listing dokumen
@@ -177,6 +179,7 @@ func (s *DokumenService) Create(input *CreateDokumenInput, file *multipart.FileH
 		SumberDanaID:   input.SumberDanaID,
 		Nilai:          input.Nilai,
 		Uraian:         strings.TrimSpace(input.Uraian),
+		NomorKwitansi:  input.NomorKwitansi,
 		FilePath:       filePath,
 		CreatedBy:      createdBy,
 	}
@@ -303,6 +306,9 @@ func (s *DokumenService) Update(id uuid.UUID, input *UpdateDokumenInput, file *m
 	}
 	if input.Uraian != "" {
 		dokumen.Uraian = strings.TrimSpace(input.Uraian)
+	}
+	if input.NomorKwitansi != "" {
+		dokumen.NomorKwitansi = input.NomorKwitansi
 	}
 
 	// Handle file upload if provided

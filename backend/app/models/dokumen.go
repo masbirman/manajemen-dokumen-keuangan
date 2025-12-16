@@ -17,6 +17,7 @@ type Dokumen struct {
 	SumberDanaID    uuid.UUID  `gorm:"type:uuid;not null" json:"sumber_dana_id"`
 	Nilai           float64    `gorm:"type:decimal(15,2);not null" json:"nilai"`
 	Uraian          string     `gorm:"type:text;not null" json:"uraian"`
+	NomorKwitansi   string     `gorm:"size:255" json:"nomor_kwitansi"`
 	FilePath        string     `gorm:"not null;size:500" json:"file_path"`
 	CreatedBy       uuid.UUID  `gorm:"type:uuid;not null" json:"created_by"`
 	CreatedAt       time.Time  `gorm:"autoCreateTime" json:"created_at"`

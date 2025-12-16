@@ -11,6 +11,7 @@ import {
   FileUpload,
 } from "@/components/ui";
 import DocumentScanner from "@/components/DocumentScanner.vue";
+import PetunjukDisplay from "@/components/PetunjukDisplay.vue";
 
 interface Option {
   id: string;
@@ -46,6 +47,7 @@ const form = ref({
   pptk_id: "",
   sumber_dana_id: "",
   jenis_dokumen_id: "",
+  nomor_kwitansi: "",
 });
 const file = ref<File | null>(null);
 const errors = ref<Record<string, string>>({});
@@ -78,6 +80,23 @@ const jenisDokumenOptions = computed(() =>
     label: `${j.kode} - ${j.nama}`,
   }))
 );
+
+// Reset form to initial values
+const resetForm = () => {
+  form.value = {
+    nomor_dokumen: "",
+    tanggal_dokumen: new Date().toISOString().split("T")[0],
+    uraian: "",
+    nilai: 0,
+    unit_kerja_id: "",
+    pptk_id: "",
+    sumber_dana_id: "",
+    jenis_dokumen_id: "",
+    nomor_kwitansi: "",
+  };
+  file.value = null;
+  errors.value = {};
+};
 
 const generateNomorDokumen = (unitKerjaNama: string) => {
   const now = new Date();
@@ -195,6 +214,7 @@ const submit = async () => {
 };
 
 onMounted(() => {
+  resetForm();
   fetchMasterData();
   fetchPetunjuk();
 });
@@ -216,14 +236,15 @@ onMounted(() => {
               readonly
               required
             />
-            <InputField
-              v-model="form.tanggal_dokumen"
-              label="Tanggal Dokumen"
-              type="date"
-              :error="errors.tanggal_dokumen"
-              readonly
-              required
-            />
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Waktu Penginputan
+              </label>
+              <div class="px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-700">
+                {{ new Date().toLocaleDateString("id-ID") }} {{ new Date().toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }) }}
+              </div>
+              <p class="text-xs text-gray-400 mt-1">Waktu akan tercatat otomatis saat menyimpan</p>
+            </div>
           </div>
 
           <InputField
@@ -233,12 +254,20 @@ onMounted(() => {
             required
           />
 
-          <CurrencyInput
-            v-model="form.nilai"
-            label="Nilai (Rp)"
-            :error="errors.nilai"
-            required
-          />
+          <div class="grid grid-cols-2 gap-4">
+            <InputField
+              v-model="form.nomor_kwitansi"
+              label="Nomor Kwitansi / Nota Pesanan"
+              :error="errors.nomor_kwitansi"
+              placeholder="Masukkan nomor kwitansi atau nota pesanan"
+            />
+            <CurrencyInput
+              v-model="form.nilai"
+              label="Nilai (Rp)"
+              :error="errors.nilai"
+              required
+            />
+          </div>
 
           <div class="grid grid-cols-2 gap-4">
             <Dropdown
@@ -344,19 +373,12 @@ onMounted(() => {
             📖 Petunjuk
           </h2>
           <div class="space-y-4">
-            <div
+            <PetunjukDisplay
               v-for="petunjuk in petunjukList"
               :key="petunjuk.id"
-              class="bg-white rounded-lg p-4 border border-blue-100"
-            >
-              <h3 class="font-medium text-gray-800 mb-2">
-                {{ petunjuk.judul }}
-              </h3>
-              <div
-                class="text-sm text-gray-600 petunjuk-content"
-                v-html="petunjuk.konten"
-              ></div>
-            </div>
+              :judul="petunjuk.judul"
+              :konten="petunjuk.konten"
+            />
           </div>
         </div>
       </div>

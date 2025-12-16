@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import api from "@/services/api";
 import { useToast } from "@/composables/useToast";
 import { DataTable, Modal, InputField } from "@/components/ui";
+import { useAuthStore } from "@/stores/auth";
 
 interface UnitKerja {
   id: string;
@@ -11,6 +12,7 @@ interface UnitKerja {
   created_at: string;
 }
 
+const authStore = useAuthStore();
 const toast = useToast();
 const loading = ref(false);
 const data = ref<UnitKerja[]>([]);
@@ -31,11 +33,18 @@ const searchQuery = ref("");
 const form = ref({ kode: "", nama: "" });
 const errors = ref<Record<string, string>>({});
 
-const columns = [
-  { key: "kode", label: "Kode", width: "150px" },
-  { key: "nama", label: "Nama Unit Kerja" },
-  { key: "actions", label: "Aksi", width: "150px" },
-];
+const columns = computed(() => {
+  const cols = [
+    { key: "kode", label: "Kode", width: "150px" },
+    { key: "nama", label: "Nama Unit Kerja" },
+  ];
+  
+  if (authStore.isSuperAdmin) {
+    cols.push({ key: "actions", label: "Aksi", width: "150px" });
+  }
+  
+  return cols;
+});
 
 const fetchData = async (page = 1) => {
   loading.value = true;
@@ -185,7 +194,7 @@ onMounted(() => fetchData());
   <div>
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-gray-800">Unit Kerja</h1>
-      <div class="flex gap-2">
+      <div v-if="authStore.isSuperAdmin" class="flex gap-2">
         <button
           @click="downloadTemplate"
           class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -222,7 +231,7 @@ onMounted(() => fetchData());
       :total-pages="totalPages"
       :total-items="totalItems"
       :per-page="perPage"
-      selectable
+      :selectable="authStore.isSuperAdmin"
       searchable
       search-placeholder="Cari kode atau nama..."
       :selected-ids="selectedIds"
@@ -231,7 +240,7 @@ onMounted(() => fetchData());
       @per-page-change="onPerPageChange"
       @search="onSearch"
     >
-      <template #bulk-actions>
+      <template v-if="authStore.isSuperAdmin" #bulk-actions>
         <button
           @click="showBulkDeleteModal = true"
           class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
@@ -239,7 +248,7 @@ onMounted(() => fetchData());
           🗑️ Hapus Terpilih
         </button>
       </template>
-      <template #actions="{ row }">
+      <template v-if="authStore.isSuperAdmin" #actions="{ row }">
         <div class="flex gap-2">
           <button
             @click.stop="openEdit(row as UnitKerja)"

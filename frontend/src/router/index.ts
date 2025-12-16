@@ -78,6 +78,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/PetunjukView.vue"),
         meta: { roles: ["super_admin"] },
       },
+      {
+        path: "login-settings",
+        name: "login-settings",
+        component: () => import("@/views/PengaturanLoginView.vue"),
+        meta: { roles: ["super_admin"] },
+      },
     ],
   },
 ];

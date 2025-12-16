@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import api from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
 
@@ -23,13 +23,65 @@ const recentDokumen = ref<
     tanggal_dokumen: string;
     uraian: string;
     nilai: number;
+    jenis_dokumen?: { nama: string; kode?: string };
+    sumber_dana?: { nama: string; kode?: string };
   }>
 >([]);
 
 const roleLabels: Record<string, string> = {
   super_admin: "Super Admin",
-  admin: "Admin",
+  admin: "Admin Keuangan",
   operator: "Operator",
+};
+
+// Dynamic greeting based on time
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return "Selamat Pagi";
+  if (hour >= 11 && hour < 15) return "Selamat Siang";
+  if (hour >= 15 && hour < 18) return "Selamat Sore";
+  return "Selamat Malam";
+};
+
+const greeting = ref(getGreeting());
+
+// Typing effect
+const displayText = ref("");
+const isTyping = ref(true);
+const typingIntervalId = ref<number | null>(null);
+
+const fullGreetingText = computed(() => {
+  return `${greeting.value}, ${authStore.user?.name || 'User'}`;
+});
+
+const startTypingEffect = () => {
+  let charIndex = 0;
+  const text = fullGreetingText.value;
+  displayText.value = "";
+  isTyping.value = true;
+  
+  // Clear previous interval
+  if (typingIntervalId.value) {
+    clearInterval(typingIntervalId.value);
+  }
+  
+  typingIntervalId.value = window.setInterval(() => {
+    if (charIndex < text.length) {
+      displayText.value += text.charAt(charIndex);
+      charIndex++;
+    } else {
+      isTyping.value = false;
+      // Wait 3 seconds then restart
+      setTimeout(() => {
+        // Update greeting in case time changed
+        greeting.value = getGreeting();
+        startTypingEffect();
+      }, 3000);
+      if (typingIntervalId.value) {
+        clearInterval(typingIntervalId.value);
+      }
+    }
+  }, 80);
 };
 
 const formatCurrency = (value: number) =>
@@ -39,8 +91,33 @@ const formatCurrency = (value: number) =>
 
 const formatDate = (date: string) => new Date(date).toLocaleDateString("id-ID");
 
+const logoUrl = ref("");
+
+// Fetch logo settings
+const fetchLogo = async () => {
+  try {
+    const response = await api.get("/public/login-settings");
+    const data = response.data.data || {};
+    if (data.login_logo_url) {
+      const url = data.login_logo_url;
+      if (url.startsWith("/")) {
+        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+        const baseUrl = apiUrl.replace(/\/api$/, "");
+        logoUrl.value = baseUrl + url;
+      } else {
+        logoUrl.value = url;
+      }
+    }
+  } catch {
+    // ignore
+  }
+};
+
 const fetchStats = async () => {
   try {
+    // Ensure we have the latest user data including relations
+    await authStore.fetchUser();
+
     const [dokRes, ukRes, pptkRes, userRes] = await Promise.all([
       api.get("/dokumen").catch(() => ({ data: { data: [], total: 0 } })),
       authStore.isAdmin
@@ -104,18 +181,76 @@ const fetchStats = async () => {
   }
 };
 
-onMounted(fetchStats);
+onMounted(() => {
+  fetchStats();
+  fetchLogo();
+  startTypingEffect();
+});
+
+onUnmounted(() => {
+  if (typingIntervalId.value) {
+    clearInterval(typingIntervalId.value);
+  }
+});
 </script>
 
 <template>
   <div>
-    <div class="mb-8">
-      <h1 class="text-2xl font-bold text-gray-800">Dashboard</h1>
-      <p class="text-gray-500">Selamat datang, {{ authStore.user?.name }}</p>
+    <!-- Hero Welcome Section -->
+    <!-- Hero Welcome Section -->
+    <div class="mb-8 bg-indigo-600 rounded-2xl p-6 md:p-8 shadow-md relative overflow-hidden">
+      
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <!-- Typing greeting -->
+          <h1 class="text-2xl md:text-3xl font-bold text-white mb-3">
+            {{ displayText }}<span class="animate-pulse" :class="isTyping ? 'opacity-100' : 'opacity-0'">|</span>
+          </h1>
+          
+          <!-- Info badges -->
+          <div class="flex flex-wrap gap-2 md:gap-3 mt-4">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-700/50 border border-indigo-500/30 rounded-full text-white text-sm font-medium">
+              <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+              {{ roleLabels[authStore.user?.role || ""] }}
+            </span>
+            <span v-if="assignedUnitKerja || authStore.isAdmin" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-700/50 border border-indigo-500/30 rounded-full text-white text-sm font-medium">
+              🏢 {{ authStore.isAdmin ? `${stats.totalUnitKerja} Unit Kerja` : assignedUnitKerja }}
+            </span>
+            <span v-if="assignedPPTKList.length > 0 || authStore.isAdmin" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-700/50 border border-indigo-500/30 rounded-full text-white text-sm font-medium">
+              👤 {{ authStore.isAdmin ? `${stats.totalPPTK} PPTK` : assignedPPTKList.join(', ') }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Logo or Clock icon -->
+        <div class="flex-shrink-0">
+          <img
+            v-if="logoUrl"
+            :src="logoUrl"
+            alt="Logo"
+            class="h-16 md:h-20 w-auto object-contain drop-shadow-md"
+          />
+          <svg
+            v-else
+            xmlns="http://www.w3.org/2000/svg"
+            class="w-20 h-20 text-indigo-400 opacity-50"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+        </div>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Total Dokumen</p>
@@ -131,7 +266,7 @@ onMounted(fetchStats);
         </div>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm text-gray-500">Unit Kerja</p>
@@ -157,7 +292,7 @@ onMounted(fetchStats);
         </div>
       </div>
 
-      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+      <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow">
         <div class="flex items-center justify-between">
           <div class="flex-1 min-w-0">
             <p class="text-sm text-gray-500">PPTK</p>
@@ -204,7 +339,7 @@ onMounted(fetchStats);
 
       <div
         v-if="authStore.isSuperAdmin"
-        class="bg-white rounded-xl shadow-sm p-6 border border-gray-100"
+        class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -223,7 +358,7 @@ onMounted(fetchStats);
 
       <div
         v-else
-        class="bg-white rounded-xl shadow-sm p-6 border border-gray-100"
+        class="bg-white rounded-xl shadow-sm p-6 border border-gray-100 hover:shadow-md transition-shadow"
       >
         <div class="flex items-center justify-between">
           <div>
@@ -297,7 +432,9 @@ onMounted(fetchStats);
           >
             <div class="flex justify-between items-start">
               <div>
-                <p class="font-medium text-gray-800">{{ doc.nomor_dokumen }}</p>
+                <p class="font-medium text-gray-800">
+                  {{ doc.jenis_dokumen?.kode || doc.jenis_dokumen?.nama || 'Jenis' }} / {{ doc.sumber_dana?.nama || 'Sumber Dana' }}
+                </p>
                 <p class="text-sm text-gray-500 truncate max-w-xs">
                   {{ doc.uraian }}
                 </p>

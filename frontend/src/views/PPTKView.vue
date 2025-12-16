@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from "vue";
 import api from "@/services/api";
 import { useToast } from "@/composables/useToast";
 import { DataTable, Modal, InputField, Dropdown } from "@/components/ui";
+import { useAuthStore } from "@/stores/auth";
 
 interface UnitKerja {
   id: string;
@@ -19,6 +20,7 @@ interface PPTK {
   avatar_path?: string;
 }
 
+const authStore = useAuthStore();
 const toast = useToast();
 const loading = ref(false);
 const data = ref<PPTK[]>([]);
@@ -45,14 +47,21 @@ const filterUnitKerja = ref("");
 const form = ref({ nip: "", nama: "", jabatan: "", unit_kerja_id: "" });
 const errors = ref<Record<string, string>>({});
 
-const columns = [
-  { key: "avatar", label: "", width: "60px" },
-  { key: "nip", label: "NIP", width: "150px" },
-  { key: "nama", label: "Nama" },
-  { key: "jabatan", label: "Jabatan" },
-  { key: "unit_kerja", label: "Unit Kerja" },
-  { key: "actions", label: "Aksi", width: "180px" },
-];
+const columns = computed(() => {
+  const cols = [
+    { key: "avatar", label: "", width: "60px" },
+    { key: "nip", label: "NIP", width: "150px" },
+    { key: "nama", label: "Nama" },
+    { key: "jabatan", label: "Jabatan" },
+    { key: "unit_kerja", label: "Unit Kerja" },
+  ];
+  
+  if (authStore.isSuperAdmin) {
+    cols.push({ key: "actions", label: "Aksi", width: "180px" });
+  }
+
+  return cols;
+});
 
 const unitKerjaOptions = computed(() =>
   unitKerjaList.value.map((uk) => ({ value: uk.id, label: uk.nama }))
@@ -255,7 +264,7 @@ onMounted(() => fetchData());
   <div>
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-2xl font-bold text-gray-800">PPTK</h1>
-      <div class="flex gap-2">
+      <div v-if="authStore.isSuperAdmin" class="flex gap-2">
         <button
           @click="downloadTemplate"
           class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
@@ -292,7 +301,7 @@ onMounted(() => fetchData());
       :total-pages="totalPages"
       :total-items="totalItems"
       :per-page="perPage"
-      selectable
+      :selectable="authStore.isSuperAdmin"
       searchable
       search-placeholder="Cari NIP atau nama..."
       :selected-ids="selectedIds"
@@ -310,7 +319,7 @@ onMounted(() => fetchData());
           @update:model-value="onFilterUnitKerja"
         />
       </template>
-      <template #bulk-actions>
+      <template v-if="authStore.isSuperAdmin" #bulk-actions>
         <button
           @click="showBulkDeleteModal = true"
           class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
@@ -335,7 +344,7 @@ onMounted(() => fetchData());
       <template #unit_kerja="{ row }">{{
         (row as PPTK).unit_kerja?.nama || "-"
       }}</template>
-      <template #actions="{ row }">
+      <template v-if="authStore.isSuperAdmin" #actions="{ row }">
         <div class="flex gap-2">
           <button
             @click.stop="openAvatarUpload(row as PPTK)"

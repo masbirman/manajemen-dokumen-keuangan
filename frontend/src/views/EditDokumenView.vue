@@ -35,6 +35,7 @@ const form = ref({
   tanggal_dokumen: "",
   uraian: "",
   nilai: 0,
+  nomor_kwitansi: "",
   unit_kerja_id: "",
   pptk_id: "",
   sumber_dana_id: "",
@@ -87,6 +88,7 @@ const fetchDokumen = async () => {
         : "",
       uraian: dokumen.uraian || "",
       nilai: dokumen.nilai || 0,
+      nomor_kwitansi: dokumen.nomor_kwitansi || "",
       unit_kerja_id: dokumen.unit_kerja_id || "",
       pptk_id: dokumen.pptk_id || "",
       sumber_dana_id: dokumen.sumber_dana_id || "",
@@ -206,12 +208,20 @@ onMounted(async () => {
           required
         />
 
-        <CurrencyInput
-          v-model="form.nilai"
-          label="Nilai (Rp)"
-          :error="errors.nilai"
-          required
-        />
+        <div class="grid grid-cols-2 gap-4">
+          <InputField
+            v-model="form.nomor_kwitansi"
+            label="Nomor Kwitansi / Nota Pesanan"
+            :error="errors.nomor_kwitansi"
+            placeholder="Masukkan nomor kwitansi atau nota pesanan"
+          />
+          <CurrencyInput
+            v-model="form.nilai"
+            label="Nilai (Rp)"
+            :error="errors.nilai"
+            required
+          />
+        </div>
 
         <div class="grid grid-cols-2 gap-4">
           <Dropdown

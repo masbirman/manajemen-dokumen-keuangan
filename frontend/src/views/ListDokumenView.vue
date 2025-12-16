@@ -12,12 +12,14 @@ interface Dokumen {
   tanggal_dokumen: string;
   uraian: string;
   nilai: number;
+  nomor_kwitansi?: string;
   file_path: string;
   created_by: string;
+  created_at: string;
   unit_kerja?: { nama: string };
   pptk?: { nama: string };
-  sumber_dana?: { nama: string };
-  jenis_dokumen?: { nama: string };
+  sumber_dana?: { kode: string; nama: string };
+  jenis_dokumen?: { nama: string; kode: string }; // Changed to include kode
   creator?: { name: string };
 }
 
@@ -35,6 +37,8 @@ const unitKerjaList = ref<UnitKerja[]>([]);
 const showDetailModal = ref(false);
 const showBulkDeleteModal = ref(false);
 const showDeleteModal = ref(false);
+const showPdfModal = ref(false); // New PDF modal state
+const pdfUrl = ref(""); // New PDF URL state
 const selectedDokumen = ref<Dokumen | null>(null);
 const selectedIds = ref<string[]>([]);
 const dokumenToDelete = ref<Dokumen | null>(null);
@@ -52,14 +56,15 @@ const filters = ref({
 });
 
 const columns = [
-  { key: "nomor_dokumen", label: "No. Dokumen", width: "180px" },
-  { key: "tanggal_dokumen", label: "Tanggal", width: "120px" },
+  { key: "created_at", label: "Waktu Input", width: "150px" },
+  { key: "nomor_kwitansi", label: "No. Kwitansi", width: "150px" },
   { key: "uraian", label: "Uraian" },
-  { key: "nilai", label: "Nilai", width: "150px" },
-  { key: "unit_kerja", label: "Unit Kerja", width: "150px" },
-  { key: "jenis_dokumen", label: "Jenis", width: "120px" },
-  { key: "creator", label: "Operator", width: "150px" },
-  { key: "actions", label: "Aksi", width: "130px" },
+  { key: "nilai", label: "Nilai", width: "130px" },
+  { key: "pptk", label: "PPTK", width: "150px" },
+  { key: "sumber_dana", label: "Sumber Dana", width: "130px" },
+  { key: "unit_kerja", label: "Unit Kerja", width: "130px" },
+  { key: "jenis_dokumen", label: "Jenis", width: "100px" },
+  { key: "actions", label: "Aksi", width: "120px" },
 ];
 
 const unitKerjaOptions = computed(() => [
@@ -72,6 +77,10 @@ const formatCurrency = (value: number) =>
     value
   );
 const formatDate = (date: string) => new Date(date).toLocaleDateString("id-ID");
+const formatDateTime = (date: string) => {
+  const d = new Date(date);
+  return d.toLocaleDateString("id-ID") + " " + d.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+};
 
 const fetchData = async (page = 1) => {
   loading.value = true;
@@ -119,17 +128,38 @@ const openDetail = (dokumen: Dokumen) => {
 };
 
 const viewFile = async (dokumen: Dokumen) => {
+  selectedDokumen.value = dokumen;
   try {
     const response = await api.get(`/dokumen/${dokumen.id}/file`, {
       responseType: "blob",
     });
-    const url = window.URL.createObjectURL(
-      new Blob([response.data], { type: "application/pdf" })
-    );
-    window.open(url, "_blank");
+    const blob = new Blob([response.data], { type: "application/pdf" });
+    pdfUrl.value = window.URL.createObjectURL(blob);
+    showPdfModal.value = true;
   } catch {
     toast.error("Gagal membuka file");
   }
+};
+
+const closePdfModal = () => {
+  showPdfModal.value = false;
+  if (pdfUrl.value) {
+    window.URL.revokeObjectURL(pdfUrl.value);
+    pdfUrl.value = "";
+  }
+};
+
+const downloadPdf = () => {
+  if (!pdfUrl.value || !selectedDokumen.value) return;
+  const link = document.createElement("a");
+  link.href = pdfUrl.value;
+  link.setAttribute(
+    "download",
+    `Dokumen_${selectedDokumen.value.nomor_dokumen.replace(/\//g, "-")}.pdf`
+  );
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 };
 
 const onSelectionChange = (ids: (string | number)[]) => {
@@ -153,10 +183,12 @@ const confirmBulkDelete = async () => {
 const applyFilter = () => fetchData(1);
 
 const canEditDelete = (dokumen: Dokumen) => {
-  // Admin/SuperAdmin can edit/delete all
-  if (authStore.isAdmin) return true;
+  // SuperAdmin can edit/delete all
+  if (authStore.isSuperAdmin) return true;
   // Operator can only edit/delete their own documents
-  return dokumen.created_by === authStore.user?.id;
+  if (authStore.isOperator) return dokumen.created_by === authStore.user?.id;
+  // Admin Keuangan cannot edit/delete
+  return false;
 };
 
 const editDokumen = (dokumen: Dokumen) => {
@@ -234,14 +266,14 @@ onMounted(() => {
       :total-pages="totalPages"
       :total-items="totalItems"
       :per-page="perPage"
-      selectable
+      :selectable="authStore.isSuperAdmin || authStore.isOperator"
       :selected-ids="selectedIds"
       @selection-change="onSelectionChange"
       @page-change="onPageChange"
       @per-page-change="onPerPageChange"
       @row-click="openDetail"
     >
-      <template #bulk-actions>
+      <template v-if="authStore.isSuperAdmin || authStore.isOperator" #bulk-actions>
         <button
           @click="showBulkDeleteModal = true"
           class="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
@@ -249,23 +281,26 @@ onMounted(() => {
           🗑️ Hapus Terpilih
         </button>
       </template>
-      <template #nomor_dokumen="{ value }">{{
-        (value as string) || "-"
+      <template #created_at="{ value }">{{
+        value ? formatDateTime(value as string) : "-"
       }}</template>
-      <template #tanggal_dokumen="{ value }">{{
-        value ? formatDate(value as string) : "-"
+      <template #nomor_kwitansi="{ value }">{{
+        (value as string) || "-"
       }}</template>
       <template #nilai="{ value }">{{
         formatCurrency(value as number)
+      }}</template>
+      <template #pptk="{ row }">{{
+        (row as Dokumen).pptk?.nama || "-"
+      }}</template>
+      <template #sumber_dana="{ row }">{{
+        (row as Dokumen).sumber_dana?.nama || "-"
       }}</template>
       <template #unit_kerja="{ row }">{{
         (row as Dokumen).unit_kerja?.nama || "-"
       }}</template>
       <template #jenis_dokumen="{ row }">{{
-        (row as Dokumen).jenis_dokumen?.nama || "-"
-      }}</template>
-      <template #creator="{ row }">{{
-        (row as Dokumen).creator?.name || "-"
+        (row as Dokumen).jenis_dokumen?.kode || (row as Dokumen).jenis_dokumen?.nama || "-"
       }}</template>
       <template #actions="{ row }">
         <div class="flex gap-1">
@@ -341,11 +376,17 @@ onMounted(() => {
           <p class="text-sm text-gray-500">Uraian</p>
           <p class="font-medium">{{ selectedDokumen.uraian }}</p>
         </div>
-        <div>
-          <p class="text-sm text-gray-500">Nilai</p>
-          <p class="font-medium text-lg text-blue-600">
-            {{ formatCurrency(selectedDokumen.nilai) }}
-          </p>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-sm text-gray-500">Nomor Kwitansi / Nota</p>
+            <p class="font-medium">{{ selectedDokumen.nomor_kwitansi || "-" }}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Nilai</p>
+            <p class="font-medium text-lg text-blue-600">
+              {{ formatCurrency(selectedDokumen.nilai) }}
+            </p>
+          </div>
         </div>
       </div>
       <template #footer>
@@ -413,6 +454,34 @@ onMounted(() => {
           class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
         >
           Hapus
+        </button>
+      </template>
+    </Modal>
+
+    <Modal
+      :show="showPdfModal"
+      title="Preview Dokumen"
+      size="xl"
+      @close="closePdfModal"
+    >
+      <div v-if="pdfUrl" class="w-full h-[70vh] bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center">
+        <iframe :src="pdfUrl" class="w-full h-full" title="PDF Preview"></iframe>
+      </div>
+      <div v-else class="h-64 flex items-center justify-center text-gray-500">
+        Memuat dokumen...
+      </div>
+      <template #footer>
+        <button
+          @click="closePdfModal"
+          class="px-4 py-2 border rounded-lg hover:bg-gray-50"
+        >
+          Tutup
+        </button>
+        <button
+          @click="downloadPdf"
+          class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+        >
+          <span>📥</span> Download
         </button>
       </template>
     </Modal>
