@@ -1,0 +1,64 @@
+services:
+  # ---------------
+  # Backend Service
+  # ---------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: always
+    environment:
+      - APP_PORT=8000
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-dokumen_user}
+      - DB_PASSWORD=${DB_PASSWORD:-dokumen_pass}
+      - DB_NAME=${DB_NAME:-dokumen_keuangan}
+      # Adjust JWT Secret for production security!
+      - JWT_SECRET=${JWT_SECRET:-very_secret_key_change_me}
+    depends_on:
+      - db
+    networks:
+      - app_network
+
+  # ----------------
+  # Frontend Service
+  # ----------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: always
+    # Dokploy / Traefik will pick up this port (80)
+    expose:
+      - "80"
+    # Mapping ports is optional in Dokploy if using internal Traefik routing,
+    # but useful if deploying via standalone docker-compose
+    ports:
+      - "5173:80"  # Map host 5173 to container 80 (Change 5173 to 80 on VPS if not using proxy)
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+  # ----------------
+  # Database Service
+  # ----------------
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-dokumen_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dokumen_pass}
+      POSTGRES_DB: ${DB_NAME:-dokumen_keuangan}
+    volumes:
+      - pg_data_prod:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pg_data_prod:
