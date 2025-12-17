@@ -13,6 +13,7 @@ const emit = defineEmits<{
 
 const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
+const containerRef = ref<HTMLDivElement | null>(null);
 const stream = ref<MediaStream | null>(null);
 const capturedImages = ref<string[]>([]);
 const isCapturing = ref(false);
@@ -23,6 +24,7 @@ const compressionQuality = ref(0.7);
 const estimatedSize = ref(0);
 
 const MAX_PDF_SIZE = 300 * 1024; // 300KB
+const CROP_PADDING = 16; // padding from edge in pixels (matching inset-4 = 1rem = 16px)
 
 const isMobile = computed(() => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -66,7 +68,7 @@ const stopCamera = () => {
   }
 };
 
-// Compress image to target size
+// Compress and optionally crop image
 const compressImage = async (
   dataUrl: string,
   maxWidth: number = 1200,
@@ -90,8 +92,8 @@ const compressImage = async (
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        // Apply slight contrast enhancement
-        ctx.filter = "contrast(1.1) brightness(1.05)";
+        // Apply slight contrast enhancement for document readability
+        ctx.filter = "contrast(1.15) brightness(1.05)";
         ctx.drawImage(img, 0, 0, width, height);
       }
 
@@ -105,39 +107,97 @@ const compressImage = async (
 const estimatePdfSize = (images: string[]): number => {
   let totalSize = 0;
   images.forEach((img) => {
-    // Base64 is ~4/3 of binary size, plus PDF overhead
     const base64Data = img.split(",")[1] || "";
     totalSize += (base64Data.length * 3) / 4;
   });
-  // Add PDF structure overhead (~5KB per page)
   totalSize += images.length * 5000;
   return totalSize;
 };
 
+// Capture and crop image to the guide frame area
 const captureImage = async () => {
-  if (!videoRef.value || !canvasRef.value || !isVideoReady.value) {
+  if (!videoRef.value || !canvasRef.value || !containerRef.value || !isVideoReady.value) {
     error.value = "Kamera belum siap, tunggu sebentar...";
     return;
   }
 
   const video = videoRef.value;
   const canvas = canvasRef.value;
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const container = containerRef.value;
+  
+  const videoWidth = video.videoWidth;
+  const videoHeight = video.videoHeight;
+  
+  // Get container dimensions (visible area)
+  const containerRect = container.getBoundingClientRect();
+  const displayWidth = containerRect.width;
+  const displayHeight = containerRect.height;
+  
+  // Calculate the crop area based on the guide frame (inset-4 = 16px padding)
+  const paddingPercent = CROP_PADDING / Math.min(displayWidth, displayHeight);
+  
+  // Since video is object-cover, calculate the actual visible portion
+  const videoAspect = videoWidth / videoHeight;
+  const containerAspect = displayWidth / displayHeight;
+  
+  let sourceX = 0;
+  let sourceY = 0;
+  let sourceWidth = videoWidth;
+  let sourceHeight = videoHeight;
+  
+  if (videoAspect > containerAspect) {
+    // Video is wider - crop sides
+    sourceWidth = videoHeight * containerAspect;
+    sourceX = (videoWidth - sourceWidth) / 2;
+  } else {
+    // Video is taller - crop top/bottom
+    sourceHeight = videoWidth / containerAspect;
+    sourceY = (videoHeight - sourceHeight) / 2;
+  }
+  
+  // Apply the guide frame padding (crop to the inner area)
+  const cropPadding = Math.min(sourceWidth, sourceHeight) * paddingPercent;
+  sourceX += cropPadding;
+  sourceY += cropPadding;
+  sourceWidth -= cropPadding * 2;
+  sourceHeight -= cropPadding * 2;
+  
+  // Set canvas to cropped dimensions (A4-like aspect ratio for documents)
+  const targetAspect = 210 / 297; // A4 aspect ratio
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
+  
+  // Adjust to closer to A4 aspect if possible
+  const currentAspect = cropWidth / cropHeight;
+  if (currentAspect > targetAspect) {
+    cropWidth = cropHeight * targetAspect;
+    sourceX += (sourceWidth - cropWidth) / 2;
+  } else {
+    cropHeight = cropWidth / targetAspect;
+    sourceY += (sourceHeight - cropHeight) / 2;
+  }
+  
+  // Set output canvas size
+  canvas.width = Math.round(cropWidth);
+  canvas.height = Math.round(cropHeight);
 
   const ctx = canvas.getContext("2d");
   if (ctx) {
-    ctx.drawImage(video, 0, 0);
+    // Draw cropped portion
+    ctx.drawImage(
+      video,
+      sourceX, sourceY, cropWidth, cropHeight,  // Source (crop area)
+      0, 0, canvas.width, canvas.height         // Destination (full canvas)
+    );
+    
     const rawImage = canvas.toDataURL("image/jpeg", 0.9);
     
     // Compress image
     const compressedImage = await compressImage(rawImage, 1200, compressionQuality.value);
     
     if (scanMode.value === "single") {
-      // Single mode: replace existing image
       capturedImages.value = [compressedImage];
     } else {
-      // Multi mode: add to list
       capturedImages.value.push(compressedImage);
     }
     
@@ -147,7 +207,6 @@ const captureImage = async () => {
     // Auto-adjust quality if too large
     if (estimatedSize.value > MAX_PDF_SIZE && compressionQuality.value > 0.3) {
       compressionQuality.value -= 0.1;
-      // Recompress all images with lower quality
       const recompressed = await Promise.all(
         capturedImages.value.map((img) => compressImage(img, 1000, compressionQuality.value))
       );
@@ -171,7 +230,6 @@ const createPDF = async () => {
   try {
     const { jsPDF } = await import("jspdf");
     
-    // Start with reasonable quality
     let quality = compressionQuality.value;
     let pdfBlob: Blob | null = null;
     let attempts = 0;
@@ -184,7 +242,6 @@ const createPDF = async () => {
         format: "a4",
       });
 
-      // Compress images with current quality
       const compressedImages = await Promise.all(
         capturedImages.value.map((img) => compressImage(img, 1000, quality))
       );
@@ -221,7 +278,6 @@ const createPDF = async () => {
         break;
       }
       
-      // Reduce quality and try again
       quality -= 0.1;
       if (quality < 0.2) quality = 0.2;
       attempts++;
@@ -272,7 +328,7 @@ onUnmounted(() => {
     <div class="bg-gray-900 text-white p-4 flex justify-between items-center">
       <div>
         <h2 class="font-semibold">Scan Dokumen</h2>
-        <p class="text-xs text-gray-400">Max 300KB</p>
+        <p class="text-xs text-gray-400">Max 300KB • Auto-crop aktif</p>
       </div>
       <button @click="$emit('close')" class="text-2xl">&times;</button>
     </div>
@@ -305,7 +361,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Camera View -->
-    <div class="flex-1 relative overflow-hidden">
+    <div ref="containerRef" class="flex-1 relative overflow-hidden">
       <video
         ref="videoRef"
         autoplay
@@ -315,48 +371,66 @@ onUnmounted(() => {
 
       <canvas ref="canvasRef" class="hidden"></canvas>
 
-      <!-- Document Guide Frame -->
-      <div class="absolute inset-4 border-2 border-white/60 rounded-lg pointer-events-none">
-        <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
-        <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
-        <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
-        <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
+      <!-- Document Guide Frame - this defines crop area -->
+      <div class="absolute inset-4 border-2 border-white/70 rounded-lg pointer-events-none bg-transparent">
+        <!-- Corner markers -->
+        <div class="absolute -top-0.5 -left-0.5 w-8 h-8 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
+        <div class="absolute -top-0.5 -right-0.5 w-8 h-8 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
+        <div class="absolute -bottom-0.5 -left-0.5 w-8 h-8 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
+        <div class="absolute -bottom-0.5 -right-0.5 w-8 h-8 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
+        
+        <!-- Instruction text -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <p class="bg-black/50 text-white px-3 py-1.5 rounded-lg text-sm backdrop-blur-sm">
+            Posisikan dokumen di dalam frame
+          </p>
+        </div>
+      </div>
+      
+      <!-- Dark overlay outside crop area -->
+      <div class="absolute inset-0 pointer-events-none">
+        <div class="absolute top-0 left-0 right-0 h-4 bg-black/40"></div>
+        <div class="absolute bottom-0 left-0 right-0 h-4 bg-black/40"></div>
+        <div class="absolute top-4 bottom-4 left-0 w-4 bg-black/40"></div>
+        <div class="absolute top-4 bottom-4 right-0 w-4 bg-black/40"></div>
       </div>
 
       <!-- Capture Button -->
-      <div class="absolute bottom-4 left-0 right-0 flex justify-center">
+      <div class="absolute bottom-6 left-0 right-0 flex justify-center">
         <button
           @click="captureImage"
           :disabled="!isVideoReady"
-          class="w-16 h-16 bg-white rounded-full border-4 border-green-400 flex items-center justify-center disabled:opacity-50 transition-all active:scale-95 shadow-lg"
+          class="w-18 h-18 bg-white rounded-full border-4 border-green-400 flex items-center justify-center disabled:opacity-50 transition-all active:scale-95 shadow-lg"
+          style="width: 72px; height: 72px;"
         >
-          <div class="w-12 h-12 bg-green-500 rounded-full"></div>
+          <div class="w-14 h-14 bg-green-500 rounded-full" style="width: 56px; height: 56px;"></div>
         </button>
       </div>
 
       <!-- Single Mode: Preview Overlay -->
       <div 
         v-if="scanMode === 'single' && capturedImages.length > 0"
-        class="absolute inset-0 bg-black/80 flex items-center justify-center p-4"
+        class="absolute inset-0 bg-black/90 flex items-center justify-center p-4"
       >
-        <div class="bg-white rounded-xl p-4 max-w-sm w-full">
-          <img :src="capturedImages[0]" class="w-full rounded-lg mb-4" />
+        <div class="bg-white rounded-xl p-4 max-w-sm w-full shadow-2xl">
+          <p class="text-sm text-gray-600 text-center mb-3 font-medium">Preview Hasil Crop</p>
+          <img :src="capturedImages[0]" class="w-full rounded-lg mb-4 border" />
           <p class="text-sm text-gray-600 text-center mb-4">
             Ukuran: ~{{ formatSize(estimatedSize) }}
           </p>
           <div class="flex gap-2">
             <button
               @click="capturedImages = []"
-              class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium"
+              class="flex-1 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-medium"
             >
-              Ulangi
+              ↻ Ulangi
             </button>
             <button
               @click="createPDF"
               :disabled="isCapturing"
-              class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
+              class="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
             >
-              {{ isCapturing ? "Proses..." : "Simpan" }}
+              {{ isCapturing ? "Proses..." : "✓ Simpan" }}
             </button>
           </div>
         </div>
@@ -371,13 +445,13 @@ onUnmounted(() => {
           :key="index"
           class="relative flex-shrink-0"
         >
-          <img :src="img" class="w-14 h-18 object-cover rounded border-2 border-gray-700" />
-          <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center">
+          <img :src="img" class="w-14 h-18 object-cover rounded border-2 border-gray-700" style="height: 72px;" />
+          <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center py-0.5">
             {{ index + 1 }}
           </span>
           <button
             @click="removeImage(index)"
-            class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+            class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center shadow"
           >
             ×
           </button>
@@ -400,7 +474,7 @@ onUnmounted(() => {
           :disabled="isCapturing || capturedImages.length === 0"
           class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
         >
-          {{ isCapturing ? "Membuat PDF..." : "Buat PDF" }}
+          {{ isCapturing ? "Membuat PDF..." : "✓ Buat PDF" }}
         </button>
       </div>
     </div>
