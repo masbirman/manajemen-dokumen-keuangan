@@ -5,7 +5,6 @@ import (
 	"dokumen-keuangan/app/http/middleware"
 	"dokumen-keuangan/app/models"
 	"dokumen-keuangan/config"
-	"os"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -16,11 +15,7 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 	api := app.Group("/api")
 
 	// Static files route for avatars and uploads
-	storagePath := os.Getenv("STORAGE_PATH")
-	if storagePath == "" {
-		storagePath = "./storage/app/public"
-	}
-	api.Static("/files", storagePath)
+	api.Static("/files", "./storage/app/public")
 
 	// Auth routes (public)
 	setupAuthRoutes(api, cfg)

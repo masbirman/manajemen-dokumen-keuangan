@@ -32,15 +32,14 @@ RUN apk add --no-cache ca-certificates wget
 # Copy binary from builder
 COPY --from=builder /app/main .
 
-# Create storage directories for persistent files
-RUN mkdir -p /app/storage/documents \
-    /app/storage/avatars \
-    /app/storage/logos \
-    /app/storage/petunjuk
+# Create storage directories
+RUN mkdir -p /app/storage/app/public/documents \
+    /app/storage/app/public/avatars \
+    /app/storage/app/public/logos \
+    /app/storage/app/public/petunjuk
 
 # Expose port
 EXPOSE 8081
 
 # Run binary
 CMD ["./main"]
-
