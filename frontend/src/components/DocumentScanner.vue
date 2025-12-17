@@ -20,7 +20,7 @@ const isCapturing = ref(false);
 const error = ref("");
 const isVideoReady = ref(false);
 const scanMode = ref<"single" | "multi">("single");
-const compressionQuality = ref(0.7);
+const compressionQuality = ref(0.85); // Higher quality for sharper images
 const estimatedSize = ref(0);
 
 const MAX_PDF_SIZE = 300 * 1024; // 300KB
@@ -83,21 +83,21 @@ const applyEnhancement = (
 
   switch (mode) {
     case "enhanced":
-      // High contrast + brightness boost for documents
+      // Strong contrast + brightness boost for color documents
       for (let i = 0; i < data.length; i += 4) {
-        // Increase contrast
-        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.3 + 128 + 15));     // R
-        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.3 + 128 + 15)); // G
-        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.3 + 128 + 15)); // B
+        // Stronger contrast (1.5x) and brightness (+20)
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.5 + 128 + 20));     // R
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.5 + 128 + 20)); // G
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.5 + 128 + 20)); // B
       }
       break;
 
     case "bw":
-      // Convert to black & white with threshold
+      // High contrast black & white with adaptive threshold
       for (let i = 0; i < data.length; i += 4) {
         const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        // Apply threshold for cleaner B&W
-        const bw = gray > 140 ? 255 : 0;
+        // Higher threshold (160) for cleaner B&W text
+        const bw = gray > 160 ? 255 : 0;
         data[i] = bw;
         data[i + 1] = bw;
         data[i + 2] = bw;
@@ -105,19 +105,14 @@ const applyEnhancement = (
       break;
 
     case "sharp":
-      // Grayscale + sharpen for text documents
-      const grayData = new Uint8ClampedArray(data.length);
+      // High contrast grayscale - best for text documents
       for (let i = 0; i < data.length; i += 4) {
         const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        // Increase contrast on grayscale
-        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.4 + 128 + 20));
-        grayData[i] = enhanced;
-        grayData[i + 1] = enhanced;
-        grayData[i + 2] = enhanced;
-        grayData[i + 3] = data[i + 3];
-      }
-      for (let i = 0; i < data.length; i++) {
-        data[i] = grayData[i];
+        // Very strong contrast (1.8x) for sharp text
+        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.8 + 128 + 25));
+        data[i] = enhanced;
+        data[i + 1] = enhanced;
+        data[i + 2] = enhanced;
       }
       break;
 
@@ -130,11 +125,11 @@ const applyEnhancement = (
   ctx.putImageData(imageData, 0, 0);
 };
 
-// Compress and enhance image
+// Compress and enhance image - prioritize quality
 const compressImage = async (
   dataUrl: string,
-  maxWidth: number = 1200,
-  quality: number = 0.7,
+  maxWidth: number = 1600, // Larger size for better quality
+  quality: number = 0.85,
   mode: EnhanceMode = "enhanced"
 ): Promise<string> => {
   return new Promise((resolve) => {
@@ -144,18 +139,20 @@ const compressImage = async (
       let width = img.width;
       let height = img.height;
 
-      // Scale down if too large
+      // Scale down only if really necessary
       if (width > maxWidth) {
         height = (height * maxWidth) / width;
         width = maxWidth;
       }
 
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = Math.round(width);
+      canvas.height = Math.round(height);
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        ctx.drawImage(img, 0, 0, width, height);
+        // Disable smoothing for sharper results
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         applyEnhancement(ctx, mode, canvas);
       }
 
