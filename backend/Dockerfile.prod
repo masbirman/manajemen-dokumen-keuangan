@@ -32,11 +32,8 @@ RUN apk add --no-cache ca-certificates wget
 # Copy binary from builder
 COPY --from=builder /app/main .
 
-# Create storage directories
-RUN mkdir -p /app/storage/app/public/documents \
-    /app/storage/app/public/avatars \
-    /app/storage/app/public/logos \
-    /app/storage/app/public/petunjuk
+# Copy any necessary static assets or config folders if needed
+# COPY --from=builder /app/storage ./storage (Example if needed)
 
 # Expose port
 EXPOSE 8081
