@@ -399,6 +399,8 @@ onMounted(() => {
 
   <DocumentScanner
     v-if="showScanner"
+    :nilai="form.nilai"
+    :tanggal="form.tanggal_dokumen"
     @pdf-created="handleScannedPdf"
     @close="showScanner = false"
   />
