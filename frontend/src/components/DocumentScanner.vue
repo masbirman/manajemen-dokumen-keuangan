@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 
 const props = defineProps<{
   nilai?: number;
@@ -11,60 +11,18 @@ const emit = defineEmits<{
   close: [];
 }>();
 
-// OpenCV types
-declare const cv: {
-  Mat: new () => Mat;
-  MatVector: new () => MatVector;
-  Size: new (width: number, height: number) => Size;
-  cvtColor: (src: Mat, dst: Mat, code: number) => void;
-  GaussianBlur: (src: Mat, dst: Mat, ksize: Size, sigmaX: number) => void;
-  Canny: (src: Mat, dst: Mat, threshold1: number, threshold2: number) => void;
-  findContours: (src: Mat, contours: MatVector, hierarchy: Mat, mode: number, method: number) => void;
-  contourArea: (contour: Mat) => number;
-  arcLength: (curve: Mat, closed: boolean) => number;
-  approxPolyDP: (curve: Mat, approxCurve: Mat, epsilon: number, closed: boolean) => void;
-  getPerspectiveTransform: (src: Mat, dst: Mat) => Mat;
-  warpPerspective: (src: Mat, dst: Mat, M: Mat, dsize: Size) => void;
-  matFromImageData: (imageData: ImageData) => Mat;
-  COLOR_RGBA2GRAY: number;
-  RETR_EXTERNAL: number;
-  CHAIN_APPROX_SIMPLE: number;
-  matFromArray: (rows: number, cols: number, type: number, array: number[]) => Mat;
-  CV_32FC2: number;
-};
-
-interface Mat {
-  delete: () => void;
-  rows: number;
-  cols: number;
-  data: Uint8Array;
-  data32F: Float32Array;
-  type: () => number;
-  size: () => { width: number; height: number };
-}
-
-interface MatVector {
-  delete: () => void;
-  size: () => number;
-  get: (index: number) => Mat;
-}
-
-interface Size {
-  width: number;
-  height: number;
-}
-
 const videoRef = ref<HTMLVideoElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const overlayCanvasRef = ref<HTMLCanvasElement | null>(null);
 const stream = ref<MediaStream | null>(null);
 const capturedImages = ref<string[]>([]);
 const isCapturing = ref(false);
 const error = ref("");
-const isOpenCVLoaded = ref(false);
 const isVideoReady = ref(false);
-const detectedCorners = ref<{ x: number; y: number }[]>([]);
-const isDetecting = ref(false);
+const scanMode = ref<"single" | "multi">("single");
+const compressionQuality = ref(0.7);
+const estimatedSize = ref(0);
+
+const MAX_PDF_SIZE = 300 * 1024; // 300KB
 
 const isMobile = computed(() => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -77,46 +35,6 @@ const generateFileName = () => {
   const nilai = props.nilai || 0;
   const tanggal = props.tanggal || new Date().toISOString().split("T")[0];
   return `DOK_${nilai}_${tanggal}.pdf`;
-};
-
-// Load OpenCV.js from CDN
-const loadOpenCV = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (typeof cv !== "undefined" && cv.Mat) {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://docs.opencv.org/4.9.0/opencv.js";
-    script.async = true;
-
-    script.onload = () => {
-      const checkReady = () => {
-        if (typeof cv !== "undefined" && cv.Mat) {
-          resolve();
-        } else {
-          setTimeout(checkReady, 100);
-        }
-      };
-      checkReady();
-    };
-
-    script.onerror = () => reject(new Error("Failed to load OpenCV.js"));
-    document.head.appendChild(script);
-  });
-};
-
-// Initialize scanner
-const initScanner = async () => {
-  try {
-    await loadOpenCV();
-    isOpenCVLoaded.value = true;
-  } catch (e) {
-    console.error("Failed to load OpenCV:", e);
-    // Continue without edge detection
-    isOpenCVLoaded.value = false;
-  }
 };
 
 const startCamera = async () => {
@@ -133,279 +51,75 @@ const startCamera = async () => {
       videoRef.value.srcObject = stream.value;
       videoRef.value.onloadedmetadata = () => {
         isVideoReady.value = true;
-        if (isOpenCVLoaded.value) {
-          startEdgeDetection();
-        }
       };
     }
   } catch (e) {
-    error.value =
-      "Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.";
+    error.value = "Tidak dapat mengakses kamera. Pastikan izin kamera diberikan.";
     console.error(e);
   }
 };
 
 const stopCamera = () => {
-  isDetecting.value = false;
   if (stream.value) {
     stream.value.getTracks().forEach((track) => track.stop());
     stream.value = null;
   }
 };
 
-// Edge detection using OpenCV
-let animationFrameId: number | null = null;
+// Compress image to target size
+const compressImage = async (
+  dataUrl: string,
+  maxWidth: number = 1200,
+  quality: number = 0.7
+): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
 
-const orderPoints = (pts: { x: number; y: number }[]): { x: number; y: number }[] => {
-  // Order: top-left, top-right, bottom-right, bottom-left
-  const sorted = [...pts].sort((a, b) => a.y - b.y);
-  const top = sorted.slice(0, 2).sort((a, b) => a.x - b.x);
-  const bottom = sorted.slice(2, 4).sort((a, b) => a.x - b.x);
-  return [top[0], top[1], bottom[1], bottom[0]];
-};
-
-const startEdgeDetection = () => {
-  if (!videoRef.value || !overlayCanvasRef.value || !isOpenCVLoaded.value) return;
-
-  isDetecting.value = true;
-  const video = videoRef.value;
-  const overlayCanvas = overlayCanvasRef.value;
-  const ctx = overlayCanvas.getContext("2d");
-
-  const detectFrame = () => {
-    if (!isDetecting.value || !ctx || !isOpenCVLoaded.value) return;
-
-    try {
-      // Get video dimensions
-      const width = video.videoWidth;
-      const height = video.videoHeight;
-      
-      if (width === 0 || height === 0) {
-        animationFrameId = requestAnimationFrame(detectFrame);
-        return;
+      // Scale down if too large
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
       }
 
-      overlayCanvas.width = width;
-      overlayCanvas.height = height;
+      canvas.width = width;
+      canvas.height = height;
 
-      // Draw video frame to canvas to get image data
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tempCtx = tempCanvas.getContext("2d");
-      if (!tempCtx) {
-        animationFrameId = requestAnimationFrame(detectFrame);
-        return;
-      }
-      tempCtx.drawImage(video, 0, 0);
-      const imageData = tempCtx.getImageData(0, 0, width, height);
-
-      // Process with OpenCV
-      const src = cv.matFromImageData(imageData);
-      const gray = new cv.Mat();
-      const blurred = new cv.Mat();
-      const edges = new cv.Mat();
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-
-      // Convert to grayscale
-      cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-      
-      // Apply Gaussian blur
-      cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-      
-      // Detect edges
-      cv.Canny(blurred, edges, 75, 200);
-      
-      // Find contours
-      cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      // Find largest quadrilateral
-      let maxArea = 0;
-      let bestContour: Mat | null = null;
-
-      for (let i = 0; i < contours.size(); i++) {
-        const contour = contours.get(i);
-        const area = cv.contourArea(contour);
-        
-        if (area > maxArea) {
-          const peri = cv.arcLength(contour, true);
-          const approx = new cv.Mat();
-          cv.approxPolyDP(contour, approx, 0.02 * peri, true);
-          
-          if (approx.rows === 4 && area > (width * height * 0.1)) {
-            maxArea = area;
-            if (bestContour) bestContour.delete();
-            bestContour = approx;
-          } else {
-            approx.delete();
-          }
-        }
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        // Apply slight contrast enhancement
+        ctx.filter = "contrast(1.1) brightness(1.05)";
+        ctx.drawImage(img, 0, 0, width, height);
       }
 
-      // Clear overlay
-      ctx.clearRect(0, 0, width, height);
-
-      if (bestContour) {
-        // Extract corner points
-        const points: { x: number; y: number }[] = [];
-        for (let i = 0; i < 4; i++) {
-          const x = bestContour.data32F[i * 2];
-          const y = bestContour.data32F[i * 2 + 1];
-          points.push({ x, y });
-        }
-        
-        const orderedPoints = orderPoints(points);
-        detectedCorners.value = orderedPoints;
-
-        // Draw polygon
-        ctx.strokeStyle = "#00ff00";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(orderedPoints[0].x, orderedPoints[0].y);
-        for (let i = 1; i < 4; i++) {
-          ctx.lineTo(orderedPoints[i].x, orderedPoints[i].y);
-        }
-        ctx.closePath();
-        ctx.stroke();
-
-        // Draw corner circles
-        ctx.fillStyle = "#00ff00";
-        orderedPoints.forEach(point => {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 10, 0, 2 * Math.PI);
-          ctx.fill();
-        });
-
-        bestContour.delete();
-      } else {
-        detectedCorners.value = [];
-      }
-
-      // Cleanup
-      src.delete();
-      gray.delete();
-      blurred.delete();
-      edges.delete();
-      contours.delete();
-      hierarchy.delete();
-
-    } catch (e) {
-      console.error("Edge detection error:", e);
-    }
-
-    animationFrameId = requestAnimationFrame(detectFrame);
-  };
-
-  detectFrame();
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.src = dataUrl;
+  });
 };
 
-const stopEdgeDetection = () => {
-  isDetecting.value = false;
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId);
-    animationFrameId = null;
-  }
+// Estimate PDF size from images
+const estimatePdfSize = (images: string[]): number => {
+  let totalSize = 0;
+  images.forEach((img) => {
+    // Base64 is ~4/3 of binary size, plus PDF overhead
+    const base64Data = img.split(",")[1] || "";
+    totalSize += (base64Data.length * 3) / 4;
+  });
+  // Add PDF structure overhead (~5KB per page)
+  totalSize += images.length * 5000;
+  return totalSize;
 };
 
-const captureWithPerspectiveTransform = (): string | null => {
-  if (!videoRef.value || detectedCorners.value.length !== 4 || !isOpenCVLoaded.value) {
-    return null;
-  }
-
-  try {
-    const video = videoRef.value;
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-
-    // Draw video to temp canvas
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = width;
-    tempCanvas.height = height;
-    const tempCtx = tempCanvas.getContext("2d");
-    if (!tempCtx) return null;
-    
-    tempCtx.drawImage(video, 0, 0);
-    const imageData = tempCtx.getImageData(0, 0, width, height);
-
-    const src = cv.matFromImageData(imageData);
-    const corners = detectedCorners.value;
-
-    // Calculate output dimensions
-    const widthA = Math.sqrt(Math.pow(corners[1].x - corners[0].x, 2) + Math.pow(corners[1].y - corners[0].y, 2));
-    const widthB = Math.sqrt(Math.pow(corners[2].x - corners[3].x, 2) + Math.pow(corners[2].y - corners[3].y, 2));
-    const maxWidth = Math.max(widthA, widthB);
-
-    const heightA = Math.sqrt(Math.pow(corners[3].x - corners[0].x, 2) + Math.pow(corners[3].y - corners[0].y, 2));
-    const heightB = Math.sqrt(Math.pow(corners[2].x - corners[1].x, 2) + Math.pow(corners[2].y - corners[1].y, 2));
-    const maxHeight = Math.max(heightA, heightB);
-
-    // Source points
-    const srcPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      corners[0].x, corners[0].y,
-      corners[1].x, corners[1].y,
-      corners[2].x, corners[2].y,
-      corners[3].x, corners[3].y
-    ]);
-
-    // Destination points
-    const dstPoints = cv.matFromArray(4, 1, cv.CV_32FC2, [
-      0, 0,
-      maxWidth - 1, 0,
-      maxWidth - 1, maxHeight - 1,
-      0, maxHeight - 1
-    ]);
-
-    // Get perspective transform
-    const M = cv.getPerspectiveTransform(srcPoints, dstPoints);
-    const dst = new cv.Mat();
-    cv.warpPerspective(src, dst, M, new cv.Size(maxWidth, maxHeight));
-
-    // Convert result to canvas
-    const resultCanvas = document.createElement("canvas");
-    resultCanvas.width = maxWidth;
-    resultCanvas.height = maxHeight;
-    const resultCtx = resultCanvas.getContext("2d");
-    
-    if (resultCtx) {
-      const resultImageData = new ImageData(
-        new Uint8ClampedArray(dst.data),
-        maxWidth,
-        maxHeight
-      );
-      resultCtx.putImageData(resultImageData, 0, 0);
-    }
-
-    // Cleanup
-    src.delete();
-    srcPoints.delete();
-    dstPoints.delete();
-    M.delete();
-    dst.delete();
-
-    return resultCanvas.toDataURL("image/jpeg", 0.85);
-  } catch (e) {
-    console.error("Perspective transform error:", e);
-    return null;
-  }
-};
-
-const captureImage = () => {
+const captureImage = async () => {
   if (!videoRef.value || !canvasRef.value || !isVideoReady.value) {
     error.value = "Kamera belum siap, tunggu sebentar...";
     return;
   }
 
-  // Try perspective transform first if document detected
-  if (detectedCorners.value.length === 4 && isOpenCVLoaded.value) {
-    const transformedImage = captureWithPerspectiveTransform();
-    if (transformedImage) {
-      capturedImages.value.push(transformedImage);
-      return;
-    }
-  }
-
-  // Fallback to regular capture
   const video = videoRef.value;
   const canvas = canvasRef.value;
   canvas.width = video.videoWidth;
@@ -414,58 +128,119 @@ const captureImage = () => {
   const ctx = canvas.getContext("2d");
   if (ctx) {
     ctx.drawImage(video, 0, 0);
-    const imageData = canvas.toDataURL("image/jpeg", 0.85);
-    capturedImages.value.push(imageData);
+    const rawImage = canvas.toDataURL("image/jpeg", 0.9);
+    
+    // Compress image
+    const compressedImage = await compressImage(rawImage, 1200, compressionQuality.value);
+    
+    if (scanMode.value === "single") {
+      // Single mode: replace existing image
+      capturedImages.value = [compressedImage];
+    } else {
+      // Multi mode: add to list
+      capturedImages.value.push(compressedImage);
+    }
+    
+    // Update estimated size
+    estimatedSize.value = estimatePdfSize(capturedImages.value);
+    
+    // Auto-adjust quality if too large
+    if (estimatedSize.value > MAX_PDF_SIZE && compressionQuality.value > 0.3) {
+      compressionQuality.value -= 0.1;
+      // Recompress all images with lower quality
+      const recompressed = await Promise.all(
+        capturedImages.value.map((img) => compressImage(img, 1000, compressionQuality.value))
+      );
+      capturedImages.value = recompressed;
+      estimatedSize.value = estimatePdfSize(capturedImages.value);
+    }
   }
 };
 
 const removeImage = (index: number) => {
   capturedImages.value.splice(index, 1);
+  estimatedSize.value = estimatePdfSize(capturedImages.value);
 };
 
 const createPDF = async () => {
   if (capturedImages.value.length === 0) return;
 
   isCapturing.value = true;
+  error.value = "";
+  
   try {
     const { jsPDF } = await import("jspdf");
-    const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
-    });
+    
+    // Start with reasonable quality
+    let quality = compressionQuality.value;
+    let pdfBlob: Blob | null = null;
+    let attempts = 0;
+    const maxAttempts = 5;
+    
+    while (attempts < maxAttempts) {
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
-    for (let i = 0; i < capturedImages.value.length; i++) {
-      if (i > 0) pdf.addPage();
+      // Compress images with current quality
+      const compressedImages = await Promise.all(
+        capturedImages.value.map((img) => compressImage(img, 1000, quality))
+      );
 
-      const img = new Image();
-      img.src = capturedImages.value[i];
-      await new Promise((resolve) => (img.onload = resolve));
+      for (let i = 0; i < compressedImages.length; i++) {
+        if (i > 0) pdf.addPage();
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgRatio = img.width / img.height;
-      const pageRatio = pageWidth / pageHeight;
+        const img = new Image();
+        img.src = compressedImages[i];
+        await new Promise((resolve) => (img.onload = resolve));
 
-      let imgWidth, imgHeight;
-      if (imgRatio > pageRatio) {
-        imgWidth = pageWidth - 20;
-        imgHeight = imgWidth / imgRatio;
-      } else {
-        imgHeight = pageHeight - 20;
-        imgWidth = imgHeight * imgRatio;
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgRatio = img.width / img.height;
+        const pageRatio = pageWidth / pageHeight;
+
+        let imgWidth, imgHeight;
+        if (imgRatio > pageRatio) {
+          imgWidth = pageWidth - 10;
+          imgHeight = imgWidth / imgRatio;
+        } else {
+          imgHeight = pageHeight - 10;
+          imgWidth = imgHeight * imgRatio;
+        }
+
+        const x = (pageWidth - imgWidth) / 2;
+        const y = (pageHeight - imgHeight) / 2;
+        pdf.addImage(compressedImages[i], "JPEG", x, y, imgWidth, imgHeight);
       }
 
-      const x = (pageWidth - imgWidth) / 2;
-      const y = (pageHeight - imgHeight) / 2;
-      pdf.addImage(capturedImages.value[i], "JPEG", x, y, imgWidth, imgHeight);
+      pdfBlob = pdf.output("blob");
+      
+      if (pdfBlob.size <= MAX_PDF_SIZE) {
+        break;
+      }
+      
+      // Reduce quality and try again
+      quality -= 0.1;
+      if (quality < 0.2) quality = 0.2;
+      attempts++;
+    }
+    
+    if (!pdfBlob) {
+      throw new Error("Failed to create PDF");
+    }
+    
+    if (pdfBlob.size > MAX_PDF_SIZE) {
+      error.value = `PDF terlalu besar (${(pdfBlob.size / 1024).toFixed(0)}KB). Coba kurangi jumlah halaman.`;
+      return;
     }
 
-    const pdfBlob = pdf.output("blob");
     const fileName = generateFileName();
     const file = new File([pdfBlob], fileName, {
       type: "application/pdf",
     });
+    
     emit("pdf-created", file);
     stopCamera();
   } catch (e) {
@@ -476,46 +251,60 @@ const createPDF = async () => {
   }
 };
 
-watch(isVideoReady, (ready) => {
-  if (ready && isOpenCVLoaded.value) {
-    startEdgeDetection();
-  }
-});
+const formatSize = (bytes: number): string => {
+  return (bytes / 1024).toFixed(0) + "KB";
+};
 
-watch(isOpenCVLoaded, (loaded) => {
-  if (loaded && isVideoReady.value) {
-    startEdgeDetection();
-  }
-});
-
-onMounted(async () => {
+onMounted(() => {
   if (isMobile.value) {
-    initScanner();
     startCamera();
   }
 });
 
 onUnmounted(() => {
-  stopEdgeDetection();
   stopCamera();
 });
 </script>
 
 <template>
   <div v-if="isMobile" class="fixed inset-0 bg-black z-50 flex flex-col">
+    <!-- Header -->
     <div class="bg-gray-900 text-white p-4 flex justify-between items-center">
-      <h2 class="font-semibold">Scan Dokumen</h2>
+      <div>
+        <h2 class="font-semibold">Scan Dokumen</h2>
+        <p class="text-xs text-gray-400">Max 300KB</p>
+      </div>
       <button @click="$emit('close')" class="text-2xl">&times;</button>
     </div>
 
-    <div v-if="error" class="bg-red-500 text-white p-3 text-center">
+    <!-- Mode Toggle -->
+    <div class="bg-gray-800 px-4 py-2 flex gap-2">
+      <button
+        @click="scanMode = 'single'; capturedImages = []"
+        class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+        :class="scanMode === 'single' 
+          ? 'bg-blue-600 text-white' 
+          : 'bg-gray-700 text-gray-300'"
+      >
+        📄 Single Page
+      </button>
+      <button
+        @click="scanMode = 'multi'; capturedImages = []"
+        class="flex-1 py-2 rounded-lg text-sm font-medium transition-colors"
+        :class="scanMode === 'multi' 
+          ? 'bg-blue-600 text-white' 
+          : 'bg-gray-700 text-gray-300'"
+      >
+        📚 Multi Page
+      </button>
+    </div>
+
+    <!-- Error -->
+    <div v-if="error" class="bg-red-500 text-white p-3 text-center text-sm">
       {{ error }}
     </div>
 
-    <div v-if="!isOpenCVLoaded" class="bg-yellow-500 text-white p-2 text-center text-sm">
-      ⏳ Memuat scanner...
-    </div>
-
+    <!-- Camera View -->
     <div class="flex-1 relative overflow-hidden">
       <video
         ref="videoRef"
@@ -524,72 +313,92 @@ onUnmounted(() => {
         class="w-full h-full object-cover"
       ></video>
 
-      <!-- Overlay canvas for edge detection -->
-      <canvas
-        ref="overlayCanvasRef"
-        class="absolute inset-0 w-full h-full pointer-events-none"
-        style="object-fit: cover"
-      ></canvas>
-
       <canvas ref="canvasRef" class="hidden"></canvas>
 
-      <!-- Guide when no document detected -->
-      <div
-        v-if="isOpenCVLoaded && isVideoReady && detectedCorners.length < 4"
-        class="absolute inset-8 border-2 border-dashed border-white/50 rounded-lg pointer-events-none"
-      >
-        <div class="absolute inset-0 flex items-center justify-center">
-          <p class="bg-black/50 text-white px-3 py-1 rounded text-sm">
-            Arahkan kamera ke dokumen
-          </p>
-        </div>
+      <!-- Document Guide Frame -->
+      <div class="absolute inset-4 border-2 border-white/60 rounded-lg pointer-events-none">
+        <div class="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
+        <div class="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
+        <div class="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
+        <div class="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
       </div>
 
-      <!-- Document detected -->
-      <div
-        v-if="detectedCorners.length === 4"
-        class="absolute top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-lg"
-      >
-        ✓ Dokumen terdeteksi
-      </div>
-
-      <div class="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+      <!-- Capture Button -->
+      <div class="absolute bottom-4 left-0 right-0 flex justify-center">
         <button
           @click="captureImage"
           :disabled="!isVideoReady"
-          class="w-16 h-16 bg-white rounded-full border-4 flex items-center justify-center disabled:opacity-50 transition-all active:scale-95"
-          :class="detectedCorners.length === 4 ? 'border-green-400' : 'border-gray-300'"
+          class="w-16 h-16 bg-white rounded-full border-4 border-green-400 flex items-center justify-center disabled:opacity-50 transition-all active:scale-95 shadow-lg"
         >
-          <div
-            class="w-12 h-12 rounded-full transition-colors"
-            :class="detectedCorners.length === 4 ? 'bg-green-500' : 'bg-red-500'"
-          ></div>
+          <div class="w-12 h-12 bg-green-500 rounded-full"></div>
         </button>
+      </div>
+
+      <!-- Single Mode: Preview Overlay -->
+      <div 
+        v-if="scanMode === 'single' && capturedImages.length > 0"
+        class="absolute inset-0 bg-black/80 flex items-center justify-center p-4"
+      >
+        <div class="bg-white rounded-xl p-4 max-w-sm w-full">
+          <img :src="capturedImages[0]" class="w-full rounded-lg mb-4" />
+          <p class="text-sm text-gray-600 text-center mb-4">
+            Ukuran: ~{{ formatSize(estimatedSize) }}
+          </p>
+          <div class="flex gap-2">
+            <button
+              @click="capturedImages = []"
+              class="flex-1 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium"
+            >
+              Ulangi
+            </button>
+            <button
+              @click="createPDF"
+              :disabled="isCapturing"
+              class="flex-1 py-2 bg-blue-600 text-white rounded-lg font-medium disabled:opacity-50"
+            >
+              {{ isCapturing ? "Proses..." : "Simpan" }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-if="capturedImages.length > 0" class="bg-gray-900 p-4">
+    <!-- Multi Mode: Thumbnail Strip & Actions -->
+    <div v-if="scanMode === 'multi' && capturedImages.length > 0" class="bg-gray-900 p-4">
       <div class="flex gap-2 overflow-x-auto pb-2">
         <div
           v-for="(img, index) in capturedImages"
           :key="index"
           class="relative flex-shrink-0"
         >
-          <img :src="img" class="w-16 h-20 object-cover rounded" />
+          <img :src="img" class="w-14 h-18 object-cover rounded border-2 border-gray-700" />
+          <span class="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs text-center">
+            {{ index + 1 }}
+          </span>
           <button
             @click="removeImage(index)"
-            class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs"
+            class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
           >
-            &times;
+            ×
           </button>
         </div>
       </div>
-      <div class="flex gap-2 mt-3 items-center">
-        <span class="text-white text-sm">{{ capturedImages.length }} halaman</span>
+      
+      <div class="flex items-center gap-3 mt-3">
+        <div class="text-white text-sm">
+          <span class="font-medium">{{ capturedImages.length }}</span> hal
+          <span class="text-gray-400 ml-2">~{{ formatSize(estimatedSize) }}</span>
+          <span 
+            v-if="estimatedSize > MAX_PDF_SIZE" 
+            class="text-red-400 ml-1"
+          >
+            (melebihi batas)
+          </span>
+        </div>
         <button
           @click="createPDF"
-          :disabled="isCapturing"
-          class="flex-1 bg-blue-600 text-white py-2 rounded-lg disabled:opacity-50"
+          :disabled="isCapturing || capturedImages.length === 0"
+          class="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium disabled:opacity-50"
         >
           {{ isCapturing ? "Membuat PDF..." : "Buat PDF" }}
         </button>
@@ -597,6 +406,7 @@ onUnmounted(() => {
     </div>
   </div>
 
+  <!-- Desktop Message -->
   <div v-else class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 text-center">
       <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
