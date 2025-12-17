@@ -68,11 +68,74 @@ const stopCamera = () => {
   }
 };
 
-// Compress and optionally crop image
+// Enhancement modes
+type EnhanceMode = "original" | "enhanced" | "bw" | "sharp";
+const enhanceMode = ref<EnhanceMode>("enhanced");
+
+// Apply image enhancement based on mode
+const applyEnhancement = (
+  ctx: CanvasRenderingContext2D,
+  mode: EnhanceMode,
+  canvas: HTMLCanvasElement
+) => {
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  switch (mode) {
+    case "enhanced":
+      // High contrast + brightness boost for documents
+      for (let i = 0; i < data.length; i += 4) {
+        // Increase contrast
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.3 + 128 + 15));     // R
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.3 + 128 + 15)); // G
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.3 + 128 + 15)); // B
+      }
+      break;
+
+    case "bw":
+      // Convert to black & white with threshold
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        // Apply threshold for cleaner B&W
+        const bw = gray > 140 ? 255 : 0;
+        data[i] = bw;
+        data[i + 1] = bw;
+        data[i + 2] = bw;
+      }
+      break;
+
+    case "sharp":
+      // Grayscale + sharpen for text documents
+      const grayData = new Uint8ClampedArray(data.length);
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        // Increase contrast on grayscale
+        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 1.4 + 128 + 20));
+        grayData[i] = enhanced;
+        grayData[i + 1] = enhanced;
+        grayData[i + 2] = enhanced;
+        grayData[i + 3] = data[i + 3];
+      }
+      for (let i = 0; i < data.length; i++) {
+        data[i] = grayData[i];
+      }
+      break;
+
+    case "original":
+    default:
+      // No enhancement
+      break;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+};
+
+// Compress and enhance image
 const compressImage = async (
   dataUrl: string,
   maxWidth: number = 1200,
-  quality: number = 0.7
+  quality: number = 0.7,
+  mode: EnhanceMode = "enhanced"
 ): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -92,9 +155,8 @@ const compressImage = async (
 
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        // Apply slight contrast enhancement for document readability
-        ctx.filter = "contrast(1.15) brightness(1.05)";
         ctx.drawImage(img, 0, 0, width, height);
+        applyEnhancement(ctx, mode, canvas);
       }
 
       resolve(canvas.toDataURL("image/jpeg", quality));
@@ -192,8 +254,8 @@ const captureImage = async () => {
     
     const rawImage = canvas.toDataURL("image/jpeg", 0.9);
     
-    // Compress image
-    const compressedImage = await compressImage(rawImage, 1200, compressionQuality.value);
+    // Compress and enhance image
+    const compressedImage = await compressImage(rawImage, 1200, compressionQuality.value, enhanceMode.value);
     
     if (scanMode.value === "single") {
       capturedImages.value = [compressedImage];
@@ -208,7 +270,7 @@ const captureImage = async () => {
     if (estimatedSize.value > MAX_PDF_SIZE && compressionQuality.value > 0.3) {
       compressionQuality.value -= 0.1;
       const recompressed = await Promise.all(
-        capturedImages.value.map((img) => compressImage(img, 1000, compressionQuality.value))
+        capturedImages.value.map((img) => compressImage(img, 1000, compressionQuality.value, enhanceMode.value))
       );
       capturedImages.value = recompressed;
       estimatedSize.value = estimatePdfSize(capturedImages.value);
@@ -243,7 +305,7 @@ const createPDF = async () => {
       });
 
       const compressedImages = await Promise.all(
-        capturedImages.value.map((img) => compressImage(img, 1000, quality))
+        capturedImages.value.map((img) => compressImage(img, 1000, quality, enhanceMode.value))
       );
 
       for (let i = 0; i < compressedImages.length; i++) {
@@ -342,7 +404,7 @@ onUnmounted(() => {
           ? 'bg-blue-600 text-white' 
           : 'bg-gray-700 text-gray-300'"
       >
-        📄 Single Page
+        📄 Single
       </button>
       <button
         @click="scanMode = 'multi'; capturedImages = []"
@@ -351,7 +413,47 @@ onUnmounted(() => {
           ? 'bg-blue-600 text-white' 
           : 'bg-gray-700 text-gray-300'"
       >
-        📚 Multi Page
+        📚 Multi
+      </button>
+    </div>
+
+    <!-- Enhancement Mode Toggle -->
+    <div class="bg-gray-800 px-4 pb-2 flex gap-1">
+      <button
+        @click="enhanceMode = 'original'"
+        class="flex-1 py-1.5 rounded text-xs font-medium transition-colors"
+        :class="enhanceMode === 'original' 
+          ? 'bg-green-600 text-white' 
+          : 'bg-gray-700 text-gray-400'"
+      >
+        Original
+      </button>
+      <button
+        @click="enhanceMode = 'enhanced'"
+        class="flex-1 py-1.5 rounded text-xs font-medium transition-colors"
+        :class="enhanceMode === 'enhanced' 
+          ? 'bg-green-600 text-white' 
+          : 'bg-gray-700 text-gray-400'"
+      >
+        ✨ Enhanced
+      </button>
+      <button
+        @click="enhanceMode = 'bw'"
+        class="flex-1 py-1.5 rounded text-xs font-medium transition-colors"
+        :class="enhanceMode === 'bw' 
+          ? 'bg-green-600 text-white' 
+          : 'bg-gray-700 text-gray-400'"
+      >
+        ⬛ B&W
+      </button>
+      <button
+        @click="enhanceMode = 'sharp'"
+        class="flex-1 py-1.5 rounded text-xs font-medium transition-colors"
+        :class="enhanceMode === 'sharp' 
+          ? 'bg-green-600 text-white' 
+          : 'bg-gray-700 text-gray-400'"
+      >
+        🔍 Sharp
       </button>
     </div>
 
