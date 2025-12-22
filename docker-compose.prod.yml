@@ -1,6 +1,13 @@
+# ============================================
+# DOKPLOY PRODUCTION DOCKER COMPOSE
+# Manajemen Dokumen Keuangan - Full Stack
+# ============================================
 version: '3.8'
 
 services:
+  # ==========================================
+  # BACKEND - Go Fiber API
+  # ==========================================
   backend:
     build:
       context: ./backend
@@ -8,30 +15,47 @@ services:
     container_name: dokumen-keuangan-backend
     restart: unless-stopped
     ports:
-      - "8001:8081"
+      - "8001:8000"
     environment:
-      - APP_PORT=8081
-      - DB_HOST=dokumen-keuangan-database-up1ivd
-      - DB_PORT=5432
-      - DB_USERNAME=dokumen_user
-      - DB_PASSWORD=Fr3aks@16121899
-      - DB_DATABASE=dokumen_db
-      - JWT_SECRET=dokumen_rahasia_key_2025
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_PORT: "8000"
+      DB_HOST: dokumen-keuangan-database-up1ivd
+      DB_PORT: "5432"
+      DB_USERNAME: dokumen_user
+      DB_PASSWORD: Fr3aks@16121899
+      DB_DATABASE: dokumen_db
+      JWT_SECRET: dokumen_rahasia_key_2025
+      CORS_ALLOWED_ORIGINS: https://dokumen.keudisdiksulteng.web.id
+    volumes:
+      - dokumen_storage:/app/storage/app/public
     networks:
       - dokploy-network
 
+  # ==========================================
+  # FRONTEND - Vue + Nginx
+  # ==========================================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: https://dokumen.keudisdiksulteng.web.id/api
+        VITE_TURNSTILE_SITE_KEY: 0x4AAAAAACIAEtjn5AUcUKN5
     container_name: dokumen-keuangan-frontend
     restart: unless-stopped
     ports:
       - "3002:80"
     depends_on:
       - backend
+    volumes:
+      - dokumen_storage:/usr/share/nginx/html/uploads
     networks:
       - dokploy-network
+
+volumes:
+  dokumen_storage:
+    driver: local
 
 networks:
   dokploy-network:
