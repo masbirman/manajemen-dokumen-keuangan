@@ -2,12 +2,18 @@ package services
 
 import (
 	"errors"
+	"fmt"
+	"mime/multipart"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"dokumen-keuangan/app/models"
 	"dokumen-keuangan/app/repositories"
 	"dokumen-keuangan/config"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -204,4 +210,72 @@ func HashPassword(password string) (string, error) {
 func VerifyPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+// UpdateProfile updates the user's profile
+func (s *AuthService) UpdateProfile(userID uuid.UUID, name, username, password string) (*models.User, error) {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Name = name
+	user.Username = username
+	// user.Email = email // Removed as User model likely doesn't support it or user rejected it
+
+	if password != "" {
+		hashed, err := HashPassword(password)
+		if err != nil {
+			return nil, err
+		}
+		user.Password = hashed
+	}
+
+	if err := s.userRepo.Update(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// UpdateAvatar updates the user's avatar
+func (s *AuthService) UpdateAvatar(userID uuid.UUID, file *multipart.FileHeader, ctx *fiber.Ctx) (string, error) {
+	// Validate file
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".webp": true}
+	if !allowedExts[ext] {
+		return "", errors.New("invalid file type")
+	}
+
+	if file.Size > 2*1024*1024 { // 2MB
+		return "", errors.New("file too large (max 2MB)")
+	}
+
+	// Create directory
+	dir := "./storage/app/public/avatars"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+
+	// Save file
+	filename := fmt.Sprintf("%s_%d%s", userID.String(), time.Now().Unix(), ext)
+	path := filepath.Join(dir, filename)
+	if err := ctx.SaveFile(file, path); err != nil {
+		return "", err
+	}
+
+	// Update user
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return "", err
+	}
+
+	publicPath := fmt.Sprintf("/api/files/avatars/%s", filename)
+	user.AvatarPath = &publicPath
+
+	if err := s.userRepo.Update(user); err != nil {
+		return "", err
+	}
+
+	return publicPath, nil
 }

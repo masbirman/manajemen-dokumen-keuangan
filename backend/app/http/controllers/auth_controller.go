@@ -165,6 +165,90 @@ func (c *AuthController) Me(ctx *fiber.Ctx) error {
 	})
 }
 
+// UpdateProfileRequest represents the profile update request body
+type UpdateProfileRequest struct {
+	Name     string `json:"name"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"`
+}
+
+// UpdateProfile updates the current user's profile
+// PUT /api/auth/profile
+func (c *AuthController) UpdateProfile(ctx *fiber.Ctx) error {
+	// Get token from Authorization header (middleware already validated it)
+	authHeader := ctx.Get("Authorization")
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	user, err := c.authService.GetUserFromToken(tokenString)
+	if err != nil {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized",
+		})
+	}
+
+	var req UpdateProfileRequest
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	// Validate required fields
+	if req.Name == "" || req.Username == "" {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Name and Username are required",
+		})
+	}
+
+	// Call service to update user
+	updatedUser, err := c.authService.UpdateProfile(user.ID, req.Name, req.Username, req.Password)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return ctx.JSON(fiber.Map{
+		"message": "Profile updated successfully",
+		"data":    updatedUser,
+	})
+}
+
+// UpdateAvatar updates the current user's avatar
+// POST /api/auth/profile/avatar
+func (c *AuthController) UpdateAvatar(ctx *fiber.Ctx) error {
+	// Get token from Authorization header
+	authHeader := ctx.Get("Authorization")
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	user, err := c.authService.GetUserFromToken(tokenString)
+	if err != nil {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Unauthorized",
+		})
+	}
+
+	// Get file
+	file, err := ctx.FormFile("avatar")
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Avatar file is required",
+		})
+	}
+
+	// Call service to upload avatar
+	avatarPath, err := c.authService.UpdateAvatar(user.ID, file, ctx)
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return ctx.JSON(fiber.Map{
+		"message":     "Avatar updated successfully",
+		"avatar_path": avatarPath,
+	})
+}
+
 // condMsg returns the message if condition is true, otherwise empty string
 func condMsg(cond bool, msg string) string {
 	if cond {

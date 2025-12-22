@@ -107,6 +107,77 @@ func (c *SettingController) GetLoginSettings(ctx *fiber.Ctx) error {
 	})
 }
 
+// GetCountdownSettings retrieves countdown settings
+// GET /api/settings/countdown
+func (c *SettingController) GetCountdownSettings(ctx *fiber.Ctx) error {
+	settingsMap, err := c.service.GetSettingsMap()
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve settings",
+		})
+	}
+
+	// Default values
+	active := false
+	if val, ok := settingsMap["countdown_active"]; ok && *val == "true" {
+		active = true
+	}
+
+	data := fiber.Map{
+		"active":      active,
+		"title":       "",
+		"description": "",
+		"target_date": "",
+	}
+
+	if val, ok := settingsMap["countdown_title"]; ok {
+		data["title"] = *val
+	}
+	if val, ok := settingsMap["countdown_description"]; ok {
+		data["description"] = *val
+	}
+	if val, ok := settingsMap["countdown_target_date"]; ok {
+		data["target_date"] = *val
+	}
+
+	return ctx.JSON(fiber.Map{
+		"success": true,
+		"data":    data,
+	})
+}
+
+// GetBrandingSettings retrieves branding settings
+// GET /api/settings/branding
+func (c *SettingController) GetBrandingSettings(ctx *fiber.Ctx) error {
+	settingsMap, err := c.service.GetSettingsMap()
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve settings",
+		})
+	}
+
+	data := fiber.Map{
+		"app_name":     "Sistem Pelimpahan",
+		"app_subtitle": "Dana UP/GU",
+		"logo_url":     "",
+	}
+
+	if val, ok := settingsMap["login_title"]; ok {
+		data["app_name"] = *val
+	}
+	if val, ok := settingsMap["login_subtitle"]; ok {
+		data["app_subtitle"] = *val
+	}
+	if val, ok := settingsMap["login_logo_url"]; ok {
+		data["logo_url"] = *val
+	}
+
+	return ctx.JSON(fiber.Map{
+		"success": true,
+		"data":    data,
+	})
+}
+
 // UploadLogo uploads login page logo
 // POST /api/settings/upload-logo
 func (c *SettingController) UploadLogo(ctx *fiber.Ctx) error {

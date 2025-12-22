@@ -26,6 +26,7 @@ export interface User {
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<User | null>(null);
   const token = ref<string | null>(localStorage.getItem("access_token"));
+  const selectedYear = ref<string>(localStorage.getItem("selectedYear") || "2025");
   const loading = ref(false);
 
   const isAuthenticated = computed(() => !!token.value && !!user.value);
@@ -35,25 +36,39 @@ export const useAuthStore = defineStore("auth", () => {
   const isSuperAdmin = computed(() => user.value?.role === "super_admin");
   const isOperator = computed(() => user.value?.role === "operator");
 
-  async function login(username: string, password: string) {
+  async function login(username: string, password: string, tahunAnggaran = '2025', turnstileToken = '') {
     loading.value = true;
     try {
-      const response = await api.post("/auth/login", { username, password });
+      const payload: any = { username, password, tahun_anggaran: tahunAnggaran };
+      if (turnstileToken) {
+        payload.turnstile_token = turnstileToken;
+      }
+
+      const response = await api.post("/auth/login", payload);
       const tokenData = response.data.data?.token || response.data;
       const accessToken = tokenData.access_token || tokenData.token;
 
       token.value = accessToken;
+      user.value = response.data.data?.user || response.data.user;
+      selectedYear.value = tahunAnggaran;
+
       localStorage.setItem("access_token", accessToken);
+      localStorage.setItem("selectedYear", tahunAnggaran);
+      
       if (tokenData.refresh_token) {
         localStorage.setItem("refresh_token", tokenData.refresh_token);
       }
-
-      // Set user from response if available
-      if (response.data.data?.user) {
-        user.value = response.data.data.user;
-      } else {
-        await fetchUser();
+      
+      if (!user.value) {
+         await fetchUser();
       }
+
+      return { success: true };
+    } catch (error: any) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Login failed' 
+      };
     } finally {
       loading.value = false;
     }
@@ -67,6 +82,7 @@ export const useAuthStore = defineStore("auth", () => {
       user.value = null;
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
+      localStorage.removeItem("selectedYear");
     }
   }
 
@@ -83,19 +99,36 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  async function checkAuth() {
+    await fetchUser();
+  }
+
   async function initialize() {
     if (token.value && !user.value) {
       await fetchUser();
     }
   }
 
-  function hasRole(roles: string[]): boolean {
-    return user.value ? roles.includes(user.value.role) : false;
+  function hasRole(roles: string[] | string): boolean {
+    if (Array.isArray(roles)) {
+        return user.value ? roles.includes(user.value.role) : false;
+    }
+    return user.value?.role === roles;
+  }
+
+  function hasAnyRole(roles: string[]): boolean {
+    return hasRole(roles);
+  }
+
+  function setYear(year: string) {
+    selectedYear.value = year;
+    localStorage.setItem("selectedYear", year);
   }
 
   return {
     user,
     token,
+    selectedYear,
     loading,
     isAuthenticated,
     isAdmin,
@@ -104,7 +137,10 @@ export const useAuthStore = defineStore("auth", () => {
     login,
     logout,
     fetchUser,
+    checkAuth,
     initialize,
     hasRole,
+    hasAnyRole,
+    setYear
   };
 });

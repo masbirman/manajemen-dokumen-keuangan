@@ -17,6 +17,7 @@ type DokumenFilter struct {
 	CreatedBy   *uuid.UUID
 	StartDate   *time.Time
 	EndDate     *time.Time
+	Year        int
 }
 
 // DokumenRepository handles dokumen data access
@@ -86,6 +87,9 @@ func (r *DokumenRepository) GetAll(page, pageSize int, filter *DokumenFilter) (*
 			// Add 1 day to include the end date
 			endDate := filter.EndDate.Add(24 * time.Hour)
 			query = query.Where("tanggal_dokumen < ?", endDate)
+		}
+		if filter.Year > 0 {
+			query = query.Where("EXTRACT(YEAR FROM tanggal_dokumen) = ?", filter.Year)
 		}
 	}
 

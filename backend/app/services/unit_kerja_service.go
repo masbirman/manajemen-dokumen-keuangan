@@ -176,3 +176,12 @@ func (s *UnitKerjaService) Delete(id uuid.UUID) error {
 
 	return s.repo.Delete(id)
 }
+
+// Count returns the total number of unit kerja
+func (s *UnitKerjaService) Count() (int64, error) {
+	result, err := s.repo.GetAll(1, 1, "")
+	if err != nil {
+		return 0, err
+	}
+	return result.Total, nil
+}

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vueup/vue-quill": "^1.2.0",
+    "@vueuse/core": "^14.1.0",
     "axios": "^1.6.7",
     "jspdf": "^2.5.2",
     "pinia": "^2.1.7",

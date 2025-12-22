@@ -58,7 +58,6 @@ type CreateDokumenInput struct {
 	NomorKwitansi  string    `json:"nomor_kwitansi"`
 }
 
-
 // UpdateDokumenInput represents input for updating a dokumen
 type UpdateDokumenInput struct {
 	NomorDokumen   string     `json:"nomor_dokumen"`
@@ -75,6 +74,7 @@ type UpdateDokumenInput struct {
 // DokumenFilterInput represents filter input for listing dokumen
 type DokumenFilterInput struct {
 	UnitKerjaID *uuid.UUID `json:"unit_kerja_id"`
+	PPTKID      *uuid.UUID `json:"pptk_id"`
 	StartDate   *string    `json:"start_date"`
 	EndDate     *string    `json:"end_date"`
 }
@@ -192,7 +192,6 @@ func (s *DokumenService) Create(input *CreateDokumenInput, file *multipart.FileH
 	return s.repo.FindByID(dokumen.ID)
 }
 
-
 // GetByID retrieves a dokumen by ID
 func (s *DokumenService) GetByID(id uuid.UUID) (*models.Dokumen, error) {
 	dokumen, err := s.repo.FindByID(id)
@@ -203,9 +202,7 @@ func (s *DokumenService) GetByID(id uuid.UUID) (*models.Dokumen, error) {
 }
 
 // GetAll retrieves all dokumen with pagination and filters
-// For Admin/SuperAdmin: returns all documents
-// For Operator: returns only documents created by them
-func (s *DokumenService) GetAll(page, pageSize int, filterInput *DokumenFilterInput, userRole string, userID uuid.UUID) (*repositories.PaginationResult, error) {
+func (s *DokumenService) GetAll(page, pageSize int, input *DokumenFilterInput, userRole models.UserRole, userID uuid.UUID, year int) (*repositories.PaginationResult, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -216,27 +213,32 @@ func (s *DokumenService) GetAll(page, pageSize int, filterInput *DokumenFilterIn
 		pageSize = 100
 	}
 
-	filter := &repositories.DokumenFilter{}
+	filter := &repositories.DokumenFilter{
+		Year: year,
+	}
 
 	// Apply role-based filtering
-	if userRole == string(models.RoleOperator) {
+	if userRole == models.RoleOperator {
 		// Operator can only see their own documents
 		filter.CreatedBy = &userID
 	}
 
-	// Apply additional filters
-	if filterInput != nil {
-		if filterInput.UnitKerjaID != nil {
-			filter.UnitKerjaID = filterInput.UnitKerjaID
+	// Apply additional filters from input
+	if input != nil {
+		if input.UnitKerjaID != nil {
+			filter.UnitKerjaID = input.UnitKerjaID
 		}
-		if filterInput.StartDate != nil && *filterInput.StartDate != "" {
-			startDate, err := time.Parse("2006-01-02", *filterInput.StartDate)
+		if input.PPTKID != nil {
+			filter.PPTKID = input.PPTKID
+		}
+		if input.StartDate != nil && *input.StartDate != "" {
+			startDate, err := time.Parse("2006-01-02", *input.StartDate)
 			if err == nil {
 				filter.StartDate = &startDate
 			}
 		}
-		if filterInput.EndDate != nil && *filterInput.EndDate != "" {
-			endDate, err := time.Parse("2006-01-02", *filterInput.EndDate)
+		if input.EndDate != nil && *input.EndDate != "" {
+			endDate, err := time.Parse("2006-01-02", *input.EndDate)
 			if err == nil {
 				filter.EndDate = &endDate
 			}
@@ -352,4 +354,43 @@ func (s *DokumenService) Delete(id uuid.UUID) error {
 	}
 
 	return s.repo.Delete(id)
+}
+
+// CountByYear counts documents by year
+func (s *DokumenService) CountByYear(year int, userRole models.UserRole, userID uuid.UUID) int64 {
+	filter := &repositories.DokumenFilter{
+		Year: year,
+	}
+
+	if userRole == models.RoleOperator {
+		filter.CreatedBy = &userID
+	}
+
+	res, err := s.repo.GetAll(1, 1, filter)
+	if err != nil {
+		return 0
+	}
+	return res.Total
+}
+
+// GetRecent gets recent documents for dashboard
+func (s *DokumenService) GetRecent(limit int, year int, userRole models.UserRole, userID uuid.UUID) ([]models.Dokumen, error) {
+	filter := &repositories.DokumenFilter{
+		Year: year,
+	}
+
+	if userRole == models.RoleOperator {
+		filter.CreatedBy = &userID
+	}
+
+	res, err := s.repo.GetAll(1, limit, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Type assertion
+	if dokumens, ok := res.Data.([]models.Dokumen); ok {
+		return dokumens, nil
+	}
+	return nil, errors.New("failed to cast result data")
 }

@@ -314,3 +314,12 @@ func (s *UserService) Activate(id uuid.UUID) (*models.User, error) {
 
 	return s.repo.FindByID(user.ID)
 }
+
+// Count returns the total number of users
+func (s *UserService) Count() (int64, error) {
+	result, err := s.repo.GetAllWithFilter(1, 1, "", "")
+	if err != nil {
+		return 0, err
+	}
+	return result.Total, nil
+}

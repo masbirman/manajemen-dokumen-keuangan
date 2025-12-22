@@ -31,6 +31,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    
+    // Add Tahun Anggaran header
+    const selectedYear = localStorage.getItem("selectedYear");
+    if (selectedYear) {
+      config.headers["X-Tahun-Anggaran"] = selectedYear;
+    }
+    
     return config;
   },
   (error) => {
@@ -68,7 +75,9 @@ api.interceptors.response.use(
       if (!refreshToken) {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+            window.location.href = "/login";
+        }
         return Promise.reject(error);
       }
 
@@ -92,7 +101,9 @@ api.interceptors.response.use(
         isRefreshing = false;
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+            window.location.href = "/login";
+        }
         return Promise.reject(refreshError);
       }
     }

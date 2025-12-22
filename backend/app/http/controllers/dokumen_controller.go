@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"dokumen-keuangan/app/http/middleware"
+	"dokumen-keuangan/app/models"
 	"dokumen-keuangan/app/services"
 
 	"github.com/gofiber/fiber/v2"
@@ -52,7 +53,14 @@ func (c *DokumenController) GetAll(ctx *fiber.Ctx) error {
 	userIDStr := middleware.GetUserIDFromContext(ctx)
 	userID, _ := uuid.Parse(userIDStr)
 
-	result, err := c.service.GetAll(page, pageSize, &filter, userRole, userID)
+	// Get Year from Header
+	yearHeader := ctx.Get("X-Tahun-Anggaran")
+	var year int
+	if yearHeader != "" {
+		year, _ = strconv.Atoi(yearHeader)
+	}
+
+	result, err := c.service.GetAll(page, pageSize, &filter, models.UserRole(userRole), userID, year)
 	if err != nil {
 		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to retrieve dokumen",

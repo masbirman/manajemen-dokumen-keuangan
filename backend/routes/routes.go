@@ -16,6 +16,9 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 
 	// Static files route for avatars and uploads
 	api.Static("/files", "./storage/app/public")
+	
+	// Serve uploads directory from root to match frontend expectation
+	app.Static("/uploads", "./storage/app/public/uploads")
 
 	// Auth routes (public)
 	setupAuthRoutes(api, cfg)
@@ -45,11 +48,22 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 	// Dokumen routes (All authenticated users)
 	setupDokumenRoutes(protected)
 
+	// Dashboard routes (All authenticated users)
+	setupDashboardRoutes(protected)
+
 	// Settings routes (Super Admin only)
 	setupSettingRoutes(protected)
 
 	// Petunjuk routes
 	setupPetunjukRoutes(protected)
+}
+
+// setupDashboardRoutes configures dashboard routes
+func setupDashboardRoutes(api fiber.Router) {
+	dashboardController := controllers.NewDashboardController()
+
+	dashboard := api.Group("/dashboard")
+	dashboard.Get("/stats", dashboardController.GetStats) // Allow all authenticated
 }
 
 // setupAuthRoutes configures authentication routes
@@ -61,6 +75,10 @@ func setupAuthRoutes(api fiber.Router, cfg *config.Config) {
 	auth.Post("/logout", authController.Logout)
 	auth.Post("/refresh", authController.Refresh)
 	auth.Get("/me", authController.Me)
+	
+	// Profile management
+	auth.Put("/profile", authController.UpdateProfile)
+	auth.Post("/profile/avatar", authController.UpdateAvatar)
 }
 
 // setupUnitKerjaRoutes configures unit kerja routes
@@ -158,20 +176,7 @@ func setupUserRoutes(api fiber.Router) {
 }
 
 
-// setupDokumenRoutes configures dokumen routes
-func setupDokumenRoutes(api fiber.Router) {
-	dokumenController := controllers.NewDokumenController()
 
-	dokumen := api.Group("/dokumen")
-
-	// All authenticated users can access dokumen (with role-based filtering)
-	dokumen.Get("/", middleware.RequireRole(models.RoleOperator), dokumenController.GetAll)
-	dokumen.Get("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.GetByID)
-	dokumen.Get("/:id/file", middleware.RequireRole(models.RoleOperator), dokumenController.GetFile)
-	dokumen.Post("/", middleware.RequireRole(models.RoleOperator), dokumenController.Create)
-	dokumen.Put("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Update)
-	dokumen.Delete("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Delete)
-}
 
 
 // setupSettingRoutes configures setting routes
@@ -183,6 +188,8 @@ func setupSettingRoutes(api fiber.Router) {
 	// Settings routes - Super Admin only
 	settings.Get("/", middleware.RequireRole(models.RoleSuperAdmin), settingController.GetAll)
 	settings.Put("/", middleware.RequireRole(models.RoleSuperAdmin), settingController.Update)
+	settings.Get("/countdown", settingController.GetCountdownSettings) 
+	settings.Get("/branding", settingController.GetBrandingSettings) // Allow all authenticated
 	settings.Post("/upload-logo", middleware.RequireRole(models.RoleSuperAdmin), settingController.UploadLogo)
 }
 
@@ -203,4 +210,19 @@ func setupPetunjukRoutes(api fiber.Router) {
 	petunjuk.Post("/upload-image", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.UploadImage)
 	petunjuk.Put("/:id", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.Update)
 	petunjuk.Delete("/:id", middleware.RequireRole(models.RoleSuperAdmin), petunjukController.Delete)
+}
+
+// setupDokumenRoutes configures dokumen routes
+func setupDokumenRoutes(api fiber.Router) {
+	dokumenController := controllers.NewDokumenController()
+
+	dokumen := api.Group("/dokumen")
+
+	// All authenticated users can access dokumen (with role-based filtering)
+	dokumen.Get("/", middleware.RequireRole(models.RoleOperator), dokumenController.GetAll)
+	dokumen.Get("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.GetByID)
+	dokumen.Get("/:id/file", middleware.RequireRole(models.RoleOperator), dokumenController.GetFile)
+	dokumen.Post("/", middleware.RequireRole(models.RoleOperator), dokumenController.Create)
+	dokumen.Put("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Update)
+	dokumen.Delete("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Delete)
 }

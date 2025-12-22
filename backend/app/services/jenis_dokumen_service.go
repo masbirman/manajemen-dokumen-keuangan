@@ -197,3 +197,12 @@ func (s *JenisDokumenService) Delete(id uuid.UUID) error {
 
 	return s.repo.Delete(id)
 }
+
+// Count returns the total number of jenis dokumen
+func (s *JenisDokumenService) Count() (int64, error) {
+	result, err := s.repo.GetAll(1, 1, "")
+	if err != nil {
+		return 0, err
+	}
+	return result.Total, nil
+}

@@ -26,6 +26,16 @@ const routes: RouteRecordRaw[] = [
         meta: { roles: ["super_admin", "admin"] },
       },
       {
+        path: '/profile',
+        name: 'profile',
+        component: () => import('@/views/ProfileView.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: '/:pathMatch(.*)*',
+        redirect: '/'
+      },
+      {
         path: "pptk",
         name: "pptk",
         component: () => import("@/views/PPTKView.vue"),
