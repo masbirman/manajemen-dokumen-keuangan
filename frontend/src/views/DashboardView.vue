@@ -51,7 +51,7 @@
             <!-- Right Column: Illustration (Responsive Width) -->
             <div class="hidden md:flex items-center justify-center">
               <img 
-                :src="apiBaseUrl + '/uploads/ilustrasi-dashboard.webp'" 
+                src="/ilustrasi-dashboard.webp" 
                 alt="Welcome Illustration" 
                 class="h-48 w-full object-contain"
               />
