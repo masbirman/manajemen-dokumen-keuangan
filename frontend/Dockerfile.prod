@@ -12,9 +12,13 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Set API URL to relative path for Nginx proxying
-# This is crucial: it tells the app to use /api relative to current domain
-ENV VITE_API_URL=/api
+# Build argument for API URL
+ARG VITE_API_URL
+ENV VITE_API_URL=${VITE_API_URL}
+
+# Build argument for Turnstile
+ARG VITE_TURNSTILE_SITE_KEY
+ENV VITE_TURNSTILE_SITE_KEY=${VITE_TURNSTILE_SITE_KEY}
 
 # Build for production
 RUN npm run build
