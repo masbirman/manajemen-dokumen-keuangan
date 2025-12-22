@@ -28,12 +28,18 @@ interface UnitKerja {
   nama: string;
 }
 
+interface PPTK {
+  id: string;
+  nama: string;
+}
+
 const toast = useToast();
 const authStore = useAuthStore();
 const router = useRouter();
 const loading = ref(false);
 const data = ref<Dokumen[]>([]);
 const unitKerjaList = ref<UnitKerja[]>([]);
+const pptkList = ref<PPTK[]>([]);
 const showDetailModal = ref(false);
 const showBulkDeleteModal = ref(false);
 const showDeleteModal = ref(false);
@@ -51,6 +57,7 @@ const perPage = ref(10);
 
 const filters = ref({
   unit_kerja_id: "" as string,
+  pptk_id: "" as string,
   start_date: "",
   end_date: "",
 });
@@ -72,6 +79,11 @@ const unitKerjaOptions = computed(() => [
   ...unitKerjaList.value.map((u) => ({ value: u.id, label: u.nama })),
 ]);
 
+const pptkOptions = computed(() => [
+  { value: "", label: "Semua PPTK" },
+  ...pptkList.value.map((p) => ({ value: p.id, label: p.nama })),
+]);
+
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(
     value
@@ -91,6 +103,8 @@ const fetchData = async (page = 1) => {
     };
     if (filters.value.unit_kerja_id)
       params.unit_kerja_id = filters.value.unit_kerja_id;
+    if (filters.value.pptk_id)
+      params.pptk_id = filters.value.pptk_id;
     if (filters.value.start_date) params.start_date = filters.value.start_date;
     if (filters.value.end_date) params.end_date = filters.value.end_date;
 
@@ -117,6 +131,15 @@ const fetchUnitKerja = async () => {
   try {
     const response = await api.get("/unit-kerja/active");
     unitKerjaList.value = response.data.data || response.data || [];
+  } catch {
+    // ignore
+  }
+};
+
+const fetchPPTK = async () => {
+  try {
+    const response = await api.get("/pptk/active");
+    pptkList.value = response.data.data || response.data || [];
   } catch {
     // ignore
   }
@@ -215,6 +238,7 @@ const deleteDokumen = async () => {
 
 onMounted(() => {
   fetchUnitKerja();
+  fetchPPTK();
   fetchData();
 });
 </script>
@@ -243,11 +267,17 @@ onMounted(() => {
     </div>
 
     <div class="bg-white rounded-lg shadow-sm p-4 mb-4 border border-gray-200">
-      <div class="grid grid-cols-4 gap-4 items-end">
+      <div class="grid grid-cols-5 gap-4 items-end">
         <Dropdown
           v-model="filters.unit_kerja_id"
           :options="unitKerjaOptions"
           label="Unit Kerja"
+          searchable
+        />
+        <Dropdown
+          v-model="filters.pptk_id"
+          :options="pptkOptions"
+          label="PPTK"
           searchable
         />
         <InputField

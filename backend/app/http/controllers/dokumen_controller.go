@@ -39,6 +39,13 @@ func (c *DokumenController) GetAll(ctx *fiber.Ctx) error {
 			filter.UnitKerjaID = &id
 		}
 	}
+
+	if pptkID := ctx.Query("pptk_id"); pptkID != "" {
+		id, err := uuid.Parse(pptkID)
+		if err == nil {
+			filter.PPTKID = &id
+		}
+	}
 	
 	if startDate := ctx.Query("start_date"); startDate != "" {
 		filter.StartDate = &startDate
