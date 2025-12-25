@@ -180,6 +180,9 @@ func setupUserRoutes(api fiber.Router) {
 	users.Delete("/:id", middleware.RequireRole(models.RoleSuperAdmin), userController.Delete)
 	users.Post("/:id/activate", middleware.RequireRole(models.RoleSuperAdmin), userController.Activate)
 	users.Post("/:id/avatar", middleware.RequireRole(models.RoleSuperAdmin), userController.UploadAvatar)
+	
+	// Reset password - Admin and Super Admin can reset
+	users.Post("/:id/reset-password", middleware.RequireRole(models.RoleAdmin), userController.ResetPassword)
 }
 
 

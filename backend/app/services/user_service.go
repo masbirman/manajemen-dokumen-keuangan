@@ -2,7 +2,9 @@ package services
 
 import (
 	"errors"
+	"math/rand"
 	"strings"
+	"time"
 
 	"dokumen-keuangan/app/models"
 	"dokumen-keuangan/app/repositories"
@@ -322,4 +324,16 @@ func (s *UserService) Count() (int64, error) {
 		return 0, err
 	}
 	return result.Total, nil
+}
+
+// GenerateRandomPassword generates a random password with given length
+func (s *UserService) GenerateRandomPassword(length int) string {
+	const charset = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	
+	password := make([]byte, length)
+	for i := range password {
+		password[i] = charset[r.Intn(len(charset))]
+	}
+	return string(password)
 }

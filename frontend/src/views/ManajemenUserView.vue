@@ -49,6 +49,9 @@ const avatarUser = ref<User | null>(null);
 const selectedIds = ref<string[]>([]);
 const avatarFile = ref<File | null>(null);
 const avatarPreview = ref<string>("");
+const showResetPasswordModal = ref(false);
+const resetPasswordResult = ref<{ username: string; new_password: string } | null>(null);
+const resettingPassword = ref(false);
 
 // Pagination & Search
 const currentPage = ref(1);
@@ -305,6 +308,25 @@ const confirmBulkDeactivate = async () => {
   }
 };
 
+const resetPassword = async (user: User) => {
+  resettingPassword.value = true;
+  try {
+    const response = await api.post(`/users/${user.id}/reset-password`);
+    if (response.data.success) {
+      resetPasswordResult.value = {
+        username: response.data.username,
+        new_password: response.data.new_password,
+      };
+      showResetPasswordModal.value = true;
+      toast.success("Password berhasil direset");
+    }
+  } catch {
+    toast.error("Gagal mereset password");
+  } finally {
+    resettingPassword.value = false;
+  }
+};
+
 onMounted(() => fetchData());
 </script>
 
@@ -417,14 +439,24 @@ onMounted(() => fetchData());
           <button
             @click.stop="openAvatarUpload(row as User)"
             class="text-green-600 hover:text-green-800"
+            title="Upload Avatar"
           >
             📷
           </button>
           <button
             @click.stop="openEdit(row as User)"
             class="text-blue-600 hover:text-blue-800"
+            title="Edit User"
           >
             Edit
+          </button>
+          <button
+            @click.stop="resetPassword(row as User)"
+            class="text-orange-600 hover:text-orange-800"
+            title="Reset Password"
+            :disabled="resettingPassword"
+          >
+            🔑
           </button>
           <button
             @click.stop="toggleActive(row as User)"
@@ -631,6 +663,30 @@ onMounted(() => fetchData());
           class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
         >
           Nonaktifkan Semua
+        </button>
+      </template>
+    </Modal>
+
+    <!-- Reset Password Result Modal -->
+    <Modal
+      :show="showResetPasswordModal"
+      title="Password Berhasil Direset"
+      @close="showResetPasswordModal = false"
+    >
+      <div class="text-center space-y-4">
+        <div class="text-6xl">🔑</div>
+        <p class="text-gray-600">Password baru untuk user <strong>{{ resetPasswordResult?.username }}</strong>:</p>
+        <div class="bg-gray-100 p-4 rounded-lg">
+          <p class="text-2xl font-mono font-bold text-blue-600 select-all">{{ resetPasswordResult?.new_password }}</p>
+        </div>
+        <p class="text-sm text-red-500">⚠️ Catat password ini! Tidak akan ditampilkan lagi.</p>
+      </div>
+      <template #footer>
+        <button
+          @click="showResetPasswordModal = false"
+          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Tutup
         </button>
       </template>
     </Modal>

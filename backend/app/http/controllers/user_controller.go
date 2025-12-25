@@ -299,3 +299,48 @@ func (c *UserController) UploadAvatar(ctx *fiber.Ctx) error {
 		"data":    updatedUser,
 	})
 }
+
+// ResetPassword resets a user's password to a random generated one
+// POST /api/users/:id/reset-password
+func (c *UserController) ResetPassword(ctx *fiber.Ctx) error {
+	idParam := ctx.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid user ID",
+		})
+	}
+
+	// Check if user exists
+	user, err := c.service.GetByID(id)
+	if err != nil {
+		if err == services.ErrUserNotFound {
+			return ctx.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "User not found",
+			})
+		}
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to retrieve user",
+		})
+	}
+
+	// Generate random password
+	newPassword := c.service.GenerateRandomPassword(8)
+
+	// Update user password
+	_, err = c.service.Update(id, &services.UpdateUserInput{
+		Password: &newPassword,
+	})
+	if err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to reset password",
+		})
+	}
+
+	return ctx.JSON(fiber.Map{
+		"success":      true,
+		"message":      "Password berhasil direset",
+		"new_password": newPassword,
+		"username":     user.Username,
+	})
+}
