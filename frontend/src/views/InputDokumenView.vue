@@ -208,7 +208,21 @@ const submit = async () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
+  // Check lock status first - redirect non-super_admin if locked
+  if (authStore.user?.role !== 'super_admin') {
+    try {
+      const lockResponse = await api.get('/settings/lock-status');
+      if (lockResponse.data.success && lockResponse.data.data?.locked) {
+        toast.error('Tahun anggaran dikunci. Anda tidak dapat input dokumen.');
+        router.push('/');
+        return;
+      }
+    } catch {
+      console.log('Lock status check failed');
+    }
+  }
+
   resetForm();
   fetchMasterData();
   fetchPetunjuk();

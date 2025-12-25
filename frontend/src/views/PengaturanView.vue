@@ -19,7 +19,7 @@ const toast = useToast();
 const loading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
-const activeTab = ref("branding"); // 'branding' | 'countdown'
+const activeTab = ref("branding"); // 'branding' | 'countdown' | 'lock'
 const fileInput = ref<HTMLInputElement | null>(null);
 
 const settings = ref<Settings>({
@@ -34,6 +34,16 @@ const settings = ref<Settings>({
 
 const countdownDate = ref("");
 const countdownTime = ref("");
+
+// Lock status
+const lockInfo = ref({
+  locked: false,
+  tahun: '2025',
+  locked_at: null as string | null,
+  locked_reason: ''
+});
+const lockReason = ref('');
+const togglingLock = ref(false);
 
 // Helper for image URL
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000';
@@ -161,7 +171,40 @@ const saveSettings = async () => {
   }
 };
 
-onMounted(fetchSettings);
+const fetchLockStatus = async () => {
+  try {
+    const response = await api.get('/settings/lock-status');
+    if (response.data.success && response.data.data) {
+      lockInfo.value = response.data.data;
+    }
+  } catch {
+    console.log('Lock status not available');
+  }
+};
+
+const toggleLock = async () => {
+  togglingLock.value = true;
+  try {
+    const response = await api.post('/settings/toggle-lock', {
+      locked: !lockInfo.value.locked,
+      reason: lockReason.value
+    });
+    if (response.data.success) {
+      lockInfo.value = response.data.data;
+      lockReason.value = '';
+      toast.success(response.data.message);
+    }
+  } catch {
+    toast.error('Gagal mengubah status kunci');
+  } finally {
+    togglingLock.value = false;
+  }
+};
+
+onMounted(() => {
+  fetchSettings();
+  fetchLockStatus();
+});
 </script>
 
 <template>
@@ -196,6 +239,17 @@ onMounted(fetchSettings);
         ]"
       >
         Countdown Dashboard
+      </button>
+      <button
+        @click="activeTab = 'lock'"
+        :class="[
+          'px-4 py-2 text-sm font-medium border-b-2 transition-colors',
+          activeTab === 'lock'
+            ? 'border-red-600 text-red-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+        ]"
+      >
+        🔒 Kunci Tahun
       </button>
     </div>
 
@@ -376,6 +430,80 @@ onMounted(fetchSettings);
                  </div>
                </div>
              </div>
+          </div>
+        </div>
+
+        <!-- Lock Tab -->
+        <div v-if="activeTab === 'lock'" class="space-y-6">
+          <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+            <h3 class="text-sm font-medium text-red-800 mb-1">🔒 Kunci Tahun Anggaran</h3>
+            <p class="text-xs text-red-600">
+              Kunci tahun anggaran untuk mencegah pengeditan data dokumen oleh user biasa.
+            </p>
+          </div>
+
+          <!-- Status Card -->
+          <div :class="['p-6 rounded-xl border-2', lockInfo.locked ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200']">
+            <div class="flex items-center gap-4">
+              <div :class="['text-5xl']">
+                {{ lockInfo.locked ? '🔒' : '🔓' }}
+              </div>
+              <div>
+                <h3 :class="['text-xl font-bold', lockInfo.locked ? 'text-red-800' : 'text-green-800']">
+                  {{ lockInfo.locked ? 'Tahun Dikunci' : 'Tahun Aktif' }}
+                </h3>
+                <p :class="['text-sm', lockInfo.locked ? 'text-red-600' : 'text-green-600']">
+                  Tahun Anggaran: {{ lockInfo.tahun || '2025' }}
+                </p>
+                <p v-if="lockInfo.locked && lockInfo.locked_at" class="text-xs text-red-500 mt-1">
+                  Dikunci pada: {{ lockInfo.locked_at }}
+                </p>
+                <p v-if="lockInfo.locked && lockInfo.locked_reason" class="text-xs text-red-500">
+                  Alasan: {{ lockInfo.locked_reason }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lock Reason -->
+          <div v-if="!lockInfo.locked">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Alasan Kunci (opsional)</label>
+            <input
+              v-model="lockReason"
+              type="text"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+              placeholder="Contoh: Tutup buku akhir tahun"
+            />
+          </div>
+
+          <!-- Toggle Button -->
+          <div class="flex justify-center pt-4">
+            <button
+              v-if="lockInfo.locked"
+              @click="toggleLock"
+              :disabled="togglingLock"
+              class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 font-medium flex items-center gap-2"
+            >
+              {{ togglingLock ? 'Memproses...' : '🔓 Buka Kunci Tahun' }}
+            </button>
+            <button
+              v-else
+              @click="toggleLock"
+              :disabled="togglingLock"
+              class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium flex items-center gap-2"
+            >
+              {{ togglingLock ? 'Memproses...' : '🔒 Kunci Tahun Anggaran' }}
+            </button>
+          </div>
+
+          <!-- Warning -->
+          <div class="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <p class="text-sm text-yellow-800 font-medium">⚠️ Perhatian:</p>
+            <ul class="list-disc list-inside text-sm text-yellow-700 mt-2 space-y-1">
+              <li>Jika dikunci, user biasa tidak dapat input/edit/hapus dokumen</li>
+              <li>Super Admin tetap dapat mengakses semua fitur</li>
+              <li>Modal peringatan akan muncul di dashboard user</li>
+            </ul>
           </div>
         </div>
 

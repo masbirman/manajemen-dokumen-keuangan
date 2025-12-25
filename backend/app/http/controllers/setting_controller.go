@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -243,4 +244,123 @@ func (c *SettingController) UploadLogo(ctx *fiber.Ctx) error {
 		"message":  "Logo uploaded successfully",
 		"logo_url": logoURL,
 	})
+}
+
+// GetLockStatus - Check if year is locked
+// GET /api/settings/lock-status
+func (c *SettingController) GetLockStatus(ctx *fiber.Ctx) error {
+	tahunAnggaran := ctx.Get("X-Tahun-Anggaran")
+	if tahunAnggaran == "" {
+		tahunAnggaran = "2025"
+	}
+
+	settingsMap, err := c.service.GetSettingsMap()
+	if err != nil {
+		return ctx.JSON(fiber.Map{
+			"success": true,
+			"data": fiber.Map{
+				"locked":        false,
+				"tahun":         tahunAnggaran,
+				"locked_at":     nil,
+				"locked_reason": "",
+			},
+		})
+	}
+
+	key := "tahun_dikunci_" + tahunAnggaran
+	if val, ok := settingsMap[key]; ok && val != nil {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(*val), &data); err == nil {
+			return ctx.JSON(fiber.Map{
+				"success": true,
+				"data":    data,
+			})
+		}
+	}
+
+	return ctx.JSON(fiber.Map{
+		"success": true,
+		"data": fiber.Map{
+			"locked":        false,
+			"tahun":         tahunAnggaran,
+			"locked_at":     nil,
+			"locked_reason": "",
+		},
+	})
+}
+
+// ToggleLock - Lock/Unlock year (super_admin only)
+// POST /api/settings/toggle-lock
+func (c *SettingController) ToggleLock(ctx *fiber.Ctx) error {
+	var req struct {
+		Locked bool   `json:"locked"`
+		Reason string `json:"reason"`
+	}
+
+	if err := ctx.BodyParser(&req); err != nil {
+		return ctx.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"message": "Invalid request",
+		})
+	}
+
+	tahunAnggaran := ctx.Get("X-Tahun-Anggaran")
+	if tahunAnggaran == "" {
+		tahunAnggaran = "2025"
+	}
+
+	key := "tahun_dikunci_" + tahunAnggaran
+	data := map[string]interface{}{
+		"locked":        req.Locked,
+		"tahun":         tahunAnggaran,
+		"locked_at":     nil,
+		"locked_reason": req.Reason,
+	}
+	if req.Locked {
+		data["locked_at"] = time.Now().Format("2006-01-02 15:04:05")
+	}
+	jsonData, _ := json.Marshal(data)
+	jsonStr := string(jsonData)
+
+	input := &services.UpdateSettingInput{
+		Settings: map[string]*string{
+			key: &jsonStr,
+		},
+	}
+	if _, err := c.service.Update(input); err != nil {
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"success": false,
+			"message": "Gagal menyimpan pengaturan",
+		})
+	}
+
+	action := "dibuka"
+	if req.Locked {
+		action = "dikunci"
+	}
+
+	return ctx.JSON(fiber.Map{
+		"success": true,
+		"message": fmt.Sprintf("Tahun Anggaran %s berhasil %s", tahunAnggaran, action),
+		"data":    data,
+	})
+}
+
+// IsYearLocked - Helper function to check if year is locked
+func IsYearLocked(tahunAnggaran string) bool {
+	settingService := services.NewSettingService()
+	settingsMap, err := settingService.GetSettingsMap()
+	if err != nil {
+		return false
+	}
+
+	key := "tahun_dikunci_" + tahunAnggaran
+	if val, ok := settingsMap[key]; ok && val != nil {
+		var data map[string]interface{}
+		if err := json.Unmarshal([]byte(*val), &data); err == nil {
+			locked, ok := data["locked"].(bool)
+			return ok && locked
+		}
+	}
+	return false
 }

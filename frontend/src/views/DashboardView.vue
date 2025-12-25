@@ -191,6 +191,46 @@
         </div>
       </div>
     </div>
+
+    <!-- Lock Status Modal -->
+    <div v-if="showLockModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60" @click="showLockModal = false"></div>
+      <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-fadeIn">
+        <!-- Header -->
+        <div :class="['p-6 text-center', lockInfo.locked ? 'bg-gradient-to-br from-red-500 to-red-600' : 'bg-gradient-to-br from-green-500 to-green-600']">
+          <div class="text-6xl mb-3">{{ lockInfo.locked ? '🔒' : '🔓' }}</div>
+          <h3 class="text-2xl font-bold text-white">{{ lockInfo.locked ? 'Tahun Anggaran Dikunci' : 'Tahun Anggaran Aktif' }}</h3>
+          <p class="text-white/80 mt-1">Tahun Anggaran {{ lockInfo.tahun || '2025' }}</p>
+        </div>
+        <!-- Body -->
+        <div class="p-6 space-y-4">
+          <div v-if="lockInfo.locked" class="text-center">
+            <p class="text-secondary-700">Input data untuk tahun ini telah ditutup.</p>
+            <p class="text-sm text-secondary-500 mt-2">Dikunci pada: {{ lockInfo.locked_at || '-' }}</p>
+            <p v-if="lockInfo.locked_reason" class="text-sm text-red-600 mt-1">Alasan: {{ lockInfo.locked_reason }}</p>
+          </div>
+          <div v-else class="text-center">
+            <p class="text-secondary-700">Anda dapat melakukan input dokumen dan transaksi lainnya.</p>
+            <p class="text-sm text-secondary-500 mt-2">Selamat bekerja!</p>
+          </div>
+          
+          <div v-if="lockInfo.locked" class="p-4 bg-red-50 rounded-xl">
+            <p class="text-sm text-red-700 font-medium">⚠️ Perhatian:</p>
+            <ul class="list-disc list-inside text-sm text-red-600 mt-2 space-y-1">
+              <li>Input Dokumen tidak tersedia</li>
+              <li>Edit/Hapus Dokumen tidak tersedia</li>
+              <li>Hubungi Super Admin untuk informasi lebih lanjut</li>
+            </ul>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div class="p-4 bg-secondary-50 flex justify-center">
+          <button @click="showLockModal = false" :class="['px-6 py-2 rounded-lg font-medium transition-colors', lockInfo.locked ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700']">
+            Mengerti
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -236,6 +276,15 @@ const countdown = ref({
 })
 const countdownDisplay = ref({ days: '00', hours: '00', minutes: '00', seconds: '00' })
 let countdownInterval: any = null
+
+// Lock status
+const showLockModal = ref(false)
+const lockInfo = ref({
+  locked: false,
+  tahun: '2025',
+  locked_at: null as string | null,
+  locked_reason: ''
+})
 
 const userName = computed(() => {
   return authStore.user?.name?.split(' ')[0] || 'User'
@@ -350,6 +399,22 @@ onMounted(async () => {
     }
   } catch (error) {
     console.log('No countdown settings found')
+  }
+
+  // Check lock status (show modal for non-super_admin users)
+  if (authStore.user?.role !== 'super_admin') {
+    try {
+      const lockResponse = await api.get('/settings/lock-status')
+      if (lockResponse.data.success && lockResponse.data.data) {
+        lockInfo.value = lockResponse.data.data
+        // Show modal on first load if year is locked
+        if (lockInfo.value.locked) {
+          showLockModal.value = true
+        }
+      }
+    } catch (error) {
+      console.log('Lock status check failed')
+    }
   }
 
   // Start typing effect

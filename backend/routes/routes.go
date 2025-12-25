@@ -198,6 +198,10 @@ func setupSettingRoutes(api fiber.Router) {
 	settings.Get("/countdown", settingController.GetCountdownSettings) 
 	settings.Get("/branding", settingController.GetBrandingSettings) // Allow all authenticated
 	settings.Post("/upload-logo", middleware.RequireRole(models.RoleSuperAdmin), settingController.UploadLogo)
+	
+	// Lock status routes
+	settings.Get("/lock-status", settingController.GetLockStatus) // All authenticated can check
+	settings.Post("/toggle-lock", middleware.RequireRole(models.RoleSuperAdmin), settingController.ToggleLock)
 }
 
 
