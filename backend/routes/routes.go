@@ -27,6 +27,10 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 	settingController := controllers.NewSettingController()
 	api.Get("/public/login-settings", settingController.GetLoginSettings)
 
+	// Public login content for login page (no auth required)
+	loginContentController := controllers.NewLoginContentController()
+	api.Get("/public/login-content/active", loginContentController.GetActive)
+
 	// Protected routes (require authentication)
 	protected := api.Group("", middleware.AuthMiddleware(cfg))
 
@@ -56,6 +60,9 @@ func SetupRoutes(app *fiber.App, cfg *config.Config) {
 
 	// Petunjuk routes
 	setupPetunjukRoutes(protected)
+
+	// Login Content routes (Super Admin only)
+	setupLoginContentRoutes(protected)
 }
 
 // setupDashboardRoutes configures dashboard routes
@@ -226,3 +233,18 @@ func setupDokumenRoutes(api fiber.Router) {
 	dokumen.Put("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Update)
 	dokumen.Delete("/:id", middleware.RequireRole(models.RoleOperator), dokumenController.Delete)
 }
+
+// setupLoginContentRoutes configures login content routes
+func setupLoginContentRoutes(api fiber.Router) {
+	loginContentController := controllers.NewLoginContentController()
+
+	loginContent := api.Group("/login-content")
+
+	// Login content routes - Super Admin only
+	loginContent.Get("/", middleware.RequireRole(models.RoleSuperAdmin), loginContentController.GetAll)
+	loginContent.Post("/", middleware.RequireRole(models.RoleSuperAdmin), loginContentController.Create)
+	loginContent.Put("/:id", middleware.RequireRole(models.RoleSuperAdmin), loginContentController.Update)
+	loginContent.Delete("/:id", middleware.RequireRole(models.RoleSuperAdmin), loginContentController.Delete)
+	loginContent.Post("/:id/image", middleware.RequireRole(models.RoleSuperAdmin), loginContentController.UploadImage)
+}
+

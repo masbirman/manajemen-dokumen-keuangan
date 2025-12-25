@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen flex">
-    <!-- Left Side: Dark Background with 3D Animation -->
+    <!-- Left Side: Dark Background with Content/3D Animation -->
     <div class="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
       <!-- Floating decorative elements with animation -->
       <div class="absolute inset-0">
@@ -13,8 +13,30 @@
         <div class="float-slower absolute top-[55%] right-[8%] w-5 h-5 border border-white/15 rotate-45"></div>
       </div>
       
-      <!-- Content with 3D Animation -->
-      <div class="flex flex-col items-center justify-center w-full px-12 z-10">
+      <!-- Scheduled Content (if available) -->
+      <div v-if="activeContent" class="flex flex-col items-center justify-center w-full px-8 z-10">
+        <img 
+          v-if="activeContent.image_url" 
+          :src="resolveImageUrl(activeContent.image_url)" 
+          alt="Illustration" 
+          :style="{ maxWidth: activeContent.image_width + 'px', width: '100%' }"
+          class="object-contain mb-8 rounded-lg"
+        />
+        <div class="text-center text-white">
+          <h1 
+            class="font-bold mb-2" 
+            :style="{ fontSize: activeContent.title_size + 'px' }"
+          >{{ activeContent.title }}</h1>
+          <p 
+            v-if="activeContent.description" 
+            class="text-slate-300"
+            :style="{ fontSize: activeContent.desc_size + 'px' }"
+          >{{ activeContent.description }}</p>
+        </div>
+      </div>
+
+      <!-- Default Content: 3D Animation (when no scheduled content) -->
+      <div v-else class="flex flex-col items-center justify-center w-full px-12 z-10">
         <!-- 3D Rotating Logo Animation -->
         <div class="mb-12 logo-container">
           <div class="logo-3d">
@@ -65,10 +87,13 @@
           <p class="text-secondary-600">{{ branding.app_subtitle }}</p>
         </div>
 
-        <!-- Title -->
-        <div class="mb-8">
-          <h2 class="text-2xl font-bold text-secondary-900">Masuk ke Sistem</h2>
-          <p class="text-secondary-500 mt-1">Mohon masukkan informasi akun Anda</p>
+        <!-- Branding Header with Logo -->
+        <div class="text-center mb-8">
+          <div v-if="logoUrl" class="w-16 h-16 mx-auto mb-3">
+            <img :src="logoUrl" alt="Logo" class="w-full h-full object-contain" />
+          </div>
+          <h2 class="text-xl font-bold text-secondary-900">{{ branding.app_name }}</h2>
+          <p class="text-secondary-500 text-sm">{{ branding.app_subtitle }}</p>
         </div>
 
         <!-- Login Form -->
@@ -227,6 +252,17 @@ const branding = ref({
   logo_url: ''
 })
 
+// Active scheduled content for left side
+interface ActiveContent {
+  title: string;
+  description?: string;
+  image_url?: string;
+  image_width?: number;
+  title_size?: number;
+  desc_size?: number;
+}
+const activeContent = ref<ActiveContent | null>(null)
+
 // API Base URL for images
 const apiBaseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:8000'
 
@@ -288,7 +324,6 @@ function loadTurnstileScript() {
 
 onMounted(async () => {
   // Load branding
-  // Load branding
   try {
     const response = await api.get('/public/login-settings')
     if (response.data.data) {
@@ -301,6 +336,16 @@ onMounted(async () => {
     }
   } catch (err) {
     console.log('Using default branding')
+  }
+  
+  // Load active scheduled content for left side
+  try {
+    const response = await api.get('/public/login-content/active')
+    if (response.data.success && response.data.data) {
+      activeContent.value = response.data.data
+    }
+  } catch (err) {
+    console.log('No active login content')
   }
   
   // Load Turnstile

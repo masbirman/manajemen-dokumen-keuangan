@@ -94,6 +94,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import("@/views/PengaturanLoginView.vue"),
         meta: { roles: ["super_admin"] },
       },
+      {
+        path: "login-content",
+        name: "login-content",
+        component: () => import("@/views/LoginContentView.vue"),
+        meta: { roles: ["super_admin"] },
+      },
     ],
   },
 ];

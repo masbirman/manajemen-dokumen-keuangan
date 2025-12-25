@@ -231,6 +231,8 @@ const menuItems: MenuItem[] = [
   { path: '/sumber-dana', label: 'Sumber Dana', icon: SaldoIcon, roles: ['super_admin', 'admin'] },
   { path: '/pptk', label: 'PPTK', icon: UserIcon, roles: ['super_admin', 'admin'] },
   { path: '/users', label: 'Manajemen User', icon: UserIcon, roles: ['super_admin'] },
-  { path: '/settings', label: 'Pengaturan', icon: SettingsIcon, roles: ['super_admin'] }
+  { path: '/settings', label: 'Pengaturan', icon: SettingsIcon, roles: ['super_admin'] },
+  { path: '/login-settings', label: 'Tampilan Login', icon: SettingsIcon, roles: ['super_admin'] },
+  { path: '/login-content', label: 'Konten Login', icon: LaporanIcon, roles: ['super_admin'] }
 ]
 </script>
